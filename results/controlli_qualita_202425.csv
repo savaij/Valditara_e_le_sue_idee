@@ -5,7 +5,9 @@ anno_scolastico,metrica,tipo_gestione,valore,nota
 202425,unità_sopra_30,statale,13227,
 202425,studenti_in_unità_sopra_30,statale,535111,
 202425,non_italiani_in_unità_sopra_30,statale,228051,
-202425,m_min_in_unità_sopra_30,statale,73842,
+202425,m_min_in_unità_sopra_30,statale,101705,Formula senza sostituzione (N diminuisce); esclude le unità irrisolvibili.
+202425,m_min_con_sostituzione_legacy_in_unità_sopra_30,statale,73842,"Formula originaria del repository (N costante, sostituzione 1:1); sottostima il numero di spostamenti se gli studenti non vengono sostituiti."
+202425,unità_sopra_30_irrisolvibili,statale,188,Unità con zero alunni italiani (N=F): la sola rimozione di alunni non italiani non può mai portarle sotto il 30%.
 202425,righe_dataset_classi_studenti,statale,116317,
 202425,studenti_totali_classi_studenti,statale,6172717,
 202425,classi_totali,statale,325878,
@@ -23,7 +25,9 @@ anno_scolastico,metrica,tipo_gestione,valore,nota
 202425,unità_sopra_30,paritaria,579,
 202425,studenti_in_unità_sopra_30,paritaria,7679,
 202425,non_italiani_in_unità_sopra_30,paritaria,3535,
-202425,m_min_in_unità_sopra_30,paritaria,1531,
+202425,m_min_in_unità_sopra_30,paritaria,1818,Formula senza sostituzione (N diminuisce); esclude le unità irrisolvibili.
+202425,m_min_con_sostituzione_legacy_in_unità_sopra_30,paritaria,1531,"Formula originaria del repository (N costante, sostituzione 1:1); sottostima il numero di spostamenti se gli studenti non vengono sostituiti."
+202425,unità_sopra_30_irrisolvibili,paritaria,38,Unità con zero alunni italiani (N=F): la sola rimozione di alunni non italiani non può mai portarle sotto il 30%.
 202425,righe_dataset_classi_studenti,paritaria,14966,
 202425,studenti_totali_classi_studenti,paritaria,342921,
 202425,classi_totali,paritaria,20183,

@@ -1,0 +1,7 @@
+tipo_gestione,ordine_scuola,percentile_usato,n_osservazioni,capienza_classe_stimata
+paritaria,SCUOLA PRIMARIA,95.0,6272,26.0
+paritaria,SCUOLA SECONDARIA I GRADO,95.0,1788,28.0
+paritaria,SCUOLA SECONDARIA II GRADO,95.0,6889,29.0
+statale,SCUOLA PRIMARIA,95.0,64929,24.0
+statale,SCUOLA SECONDARIA I GRADO,95.0,21178,24.0
+statale,SCUOLA SECONDARIA II GRADO,95.0,28818,26.0

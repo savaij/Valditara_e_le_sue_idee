@@ -57,6 +57,8 @@ UNIT_FIELDS = [
     "quota_non_italiani",
     "sopra_30",
     "m_min",
+    "m_min_irrisolvibile",
+    "m_min_con_sostituzione_legacy",
     "classi_esatte",
     "alunni_classi_esatte",
     "delta_n_cittadinanza_meno_classi",
@@ -76,11 +78,13 @@ AGG_FIELDS = [
     "denominazione_scuola",
     "unita_totali",
     "unita_sopra_30",
+    "unita_sopra_30_irrisolvibili",
     "studenti_totali_sopra_30",
     "studenti_non_italiani_sopra_30",
     "m_min_sopra_30",
     "m_min_pct_non_italiani_sopra_30",
     "m_min_pct_studenti_sopra_30",
+    "m_min_con_sostituzione_legacy_sopra_30",
     "studenti_totali_analizzati",
     "studenti_non_italiani_analizzati",
     "m_min_pct_non_italiani_analizzati",
@@ -130,13 +134,44 @@ def ratio_float(numerator: int, denominator: int) -> float | None:
     return numerator / denominator
 
 
-def ceil_excess(f: int, n: int) -> int:
-    """Exact integer implementation of max(0, ceil(F - 0.30*N))."""
+def ceil_excess_con_sostituzione(f: int, n: int) -> int:
+    """Formula originaria: max(0, ceil(F - 0.30*N)).
+
+    Valida SOLO sotto l'ipotesi che ogni studente spostato sia sostituito da
+    un altro studente, cioè N resta costante. Mantenuta come valore legacy
+    per confronto: vedi ``ceil_excess_senza_sostituzione`` per la quantità
+    usata come indicatore principale a partire da questa revisione.
+    """
 
     excess_tenths = THRESHOLD_DEN * f - THRESHOLD_NUM * n
     if excess_tenths <= 0:
         return 0
     return (excess_tenths + THRESHOLD_DEN - 1) // THRESHOLD_DEN
+
+
+def ceil_excess_senza_sostituzione(f: int, n: int) -> tuple[int | None, bool]:
+    """Minimo m tale che (F-m)/(N-m) <= 0.30, con m spostati e NON sostituiti.
+
+    A differenza della formula "con sostituzione", qui anche N diminuisce di
+    m (lo studente spostato lascia l'unità e non viene rimpiazzato). Risolvendo
+    10*(F-m) <= 3*(N-m) per il minimo intero m si ottiene
+    m = ceil(max(0, 10F - 3N) / 7), con aritmetica intera esatta.
+
+    Caso limite genuino: se l'unità non ha alunni con cittadinanza italiana
+    (N == F > 0), rimuovere solo alunni non italiani non altera mai la quota
+    (resta 100% finché resta almeno uno studente): è matematicamente
+    irrisolvibile per pura sottrazione, senza importare alunni italiani.
+    In questo caso la funzione restituisce (None, True).
+    """
+
+    if n == f and f > 0:
+        return None, True
+    excess_sevenths = THRESHOLD_DEN * f - THRESHOLD_NUM * n
+    if excess_sevenths <= 0:
+        return 0, False
+    denom = THRESHOLD_DEN - THRESHOLD_NUM  # 10 - 3 = 7
+    m = (excess_sevenths + denom - 1) // denom
+    return m, False
 
 
 def source_path(dataset: str, management: str) -> Path:
@@ -256,6 +291,8 @@ def load_units(management: str) -> tuple[list[dict[str, object]], dict[str, obje
         "above_30_n_total": 0,
         "above_30_f_total": 0,
         "above_30_m_min_total": 0,
+        "above_30_m_min_con_sostituzione_total": 0,
+        "above_30_irrisolvibili": 0,
         "registry_missing_units": 0,
         "class_exact_matches": 0,
         "class_missing_exact": 0,
@@ -326,7 +363,8 @@ def load_units(management: str) -> tuple[list[dict[str, object]], dict[str, obje
             diagnostics["class_missing_exact"] += 1
 
         above = THRESHOLD_DEN * non_italiani > THRESHOLD_NUM * n
-        m_min = ceil_excess(non_italiani, n)
+        m_min, irrisolvibile = ceil_excess_senza_sostituzione(non_italiani, n)
+        m_min_legacy = ceil_excess_con_sostituzione(non_italiani, n)
         diagnostics["citizenship_n_total"] += n
         diagnostics["citizenship_f_total"] += non_italiani
         diagnostics["citizenship_italiani_total"] += italiani
@@ -334,7 +372,11 @@ def load_units(management: str) -> tuple[list[dict[str, object]], dict[str, obje
             diagnostics["above_30_units"] += 1
             diagnostics["above_30_n_total"] += n
             diagnostics["above_30_f_total"] += non_italiani
-            diagnostics["above_30_m_min_total"] += m_min
+            diagnostics["above_30_m_min_con_sostituzione_total"] += m_min_legacy
+            if irrisolvibile:
+                diagnostics["above_30_irrisolvibili"] += 1
+            else:
+                diagnostics["above_30_m_min_total"] += m_min
 
         units.append(
             {
@@ -363,7 +405,9 @@ def load_units(management: str) -> tuple[list[dict[str, object]], dict[str, obje
                 "alunni_totali": n,
                 "quota_non_italiani": f"{non_italiani / n:.6f}",
                 "sopra_30": 1 if above else 0,
-                "m_min": m_min,
+                "m_min": m_min if m_min is not None else "",
+                "m_min_irrisolvibile": 1 if irrisolvibile else 0,
+                "m_min_con_sostituzione_legacy": m_min_legacy,
                 "classi_esatte": classi_esatte,
                 "alunni_classi_esatte": alunni_classi,
                 "delta_n_cittadinanza_meno_classi": delta,
@@ -395,7 +439,11 @@ def aggregate_rows(
         all_f = sum(int(row["alunni_non_italiani"]) for row in members)
         above_n = sum(int(row["alunni_totali"]) for row in flagged)
         above_f = sum(int(row["alunni_non_italiani"]) for row in flagged)
-        above_m = sum(int(row["m_min"]) for row in flagged)
+        above_irrisolvibili = sum(int(row["m_min_irrisolvibile"]) for row in flagged)
+        above_m = sum(
+            int(row["m_min"]) for row in flagged if row["m_min"] != ""
+        )
+        above_m_legacy = sum(int(row["m_min_con_sostituzione_legacy"]) for row in flagged)
         exact_class_units = sum(int(row["chiave_classi_confrontabile"]) for row in members)
         missing_class_units = len(members) - exact_class_units
         classes_sum = sum(
@@ -415,11 +463,13 @@ def aggregate_rows(
             "denominazione_scuola": "",
             "unita_totali": len(members),
             "unita_sopra_30": len(flagged),
+            "unita_sopra_30_irrisolvibili": above_irrisolvibili,
             "studenti_totali_sopra_30": above_n,
             "studenti_non_italiani_sopra_30": above_f,
             "m_min_sopra_30": above_m,
             "m_min_pct_non_italiani_sopra_30": pct(above_m, above_f),
             "m_min_pct_studenti_sopra_30": pct(above_m, above_n),
+            "m_min_con_sostituzione_legacy_sopra_30": above_m_legacy,
             "studenti_totali_analizzati": all_n,
             "studenti_non_italiani_analizzati": all_f,
             "m_min_pct_non_italiani_analizzati": pct(above_m, all_f),
@@ -487,7 +537,24 @@ def build_qc(diagnostics: list[dict[str, object]], units: list[dict[str, object]
                 make_qc_row("unità_sopra_30", diag["above_30_units"], mgmt),
                 make_qc_row("studenti_in_unità_sopra_30", diag["above_30_n_total"], mgmt),
                 make_qc_row("non_italiani_in_unità_sopra_30", diag["above_30_f_total"], mgmt),
-                make_qc_row("m_min_in_unità_sopra_30", diag["above_30_m_min_total"], mgmt),
+                make_qc_row(
+                    "m_min_in_unità_sopra_30",
+                    diag["above_30_m_min_total"],
+                    mgmt,
+                    "Formula senza sostituzione (N diminuisce); esclude le unità irrisolvibili.",
+                ),
+                make_qc_row(
+                    "m_min_con_sostituzione_legacy_in_unità_sopra_30",
+                    diag["above_30_m_min_con_sostituzione_total"],
+                    mgmt,
+                    "Formula originaria del repository (N costante, sostituzione 1:1); sottostima il numero di spostamenti se gli studenti non vengono sostituiti.",
+                ),
+                make_qc_row(
+                    "unità_sopra_30_irrisolvibili",
+                    diag["above_30_irrisolvibili"],
+                    mgmt,
+                    "Unità con zero alunni italiani (N=F): la sola rimozione di alunni non italiani non può mai portarle sotto il 30%.",
+                ),
                 make_qc_row("righe_dataset_classi_studenti", diag["class_rows"], mgmt),
                 make_qc_row("studenti_totali_classi_studenti", diag["classes_students_total"], mgmt),
                 make_qc_row("classi_totali", diag["classes_total"], mgmt),
@@ -575,7 +642,11 @@ def main() -> None:
     )
     flagged = sorted(
         [row for row in all_units if int(row["sopra_30"]) == 1],
-        key=lambda row: (-float(row["quota_non_italiani"]), -int(row["m_min"]), str(row["codice_scuola"])),
+        key=lambda row: (
+            -float(row["quota_non_italiani"]),
+            -int(row["m_min"]) if row["m_min"] != "" else 1,
+            str(row["codice_scuola"]),
+        ),
     )
 
     write_csv(PROCESSED / f"unita_{YEAR}.csv", all_units, UNIT_FIELDS)
@@ -600,15 +671,20 @@ def main() -> None:
         "generated_on": date.today().isoformat(),
         "school_year": YEAR_LABEL,
         "threshold": 0.30,
-        "formula": "M_min = max(0, ceil(F - 0.30*N))",
+        "formula": "M_min = ceil(max(0, 10F - 3N) / 7); spostamento SENZA sostituzione, N diminuisce di M_min",
+        "formula_con_sostituzione_legacy": "M_min_legacy = max(0, ceil(F - 0.30*N)); assume sostituzione 1:1, N costante (formula originaria, sottostima gli spostamenti reali)",
         "unit_key": ["tipo_gestione", "CODICESCUOLA", "ORDINESCUOLA", "ANNOCORSO"],
         "units": len(all_units),
         "units_above_30": len(flagged),
+        "units_above_30_irrisolvibili": sum(1 for row in flagged if row["m_min_irrisolvibile"] == 1),
         "students": sum(int(row["alunni_totali"]) for row in all_units),
         "non_italian_students": sum(int(row["alunni_non_italiani"]) for row in all_units),
         "students_in_units_above_30": sum(int(row["alunni_totali"]) for row in flagged),
         "non_italian_students_in_units_above_30": sum(int(row["alunni_non_italiani"]) for row in flagged),
-        "m_min_in_units_above_30": sum(int(row["m_min"]) for row in flagged),
+        "m_min_in_units_above_30": sum(int(row["m_min"]) for row in flagged if row["m_min"] != ""),
+        "m_min_con_sostituzione_legacy_in_units_above_30": sum(
+            int(row["m_min_con_sostituzione_legacy"]) for row in flagged
+        ),
         "anagrafe_missing_units": sum(1 for row in all_units if row["anagrafe_mappata"] == "0"),
         "class_exact_key_missing_units": sum(1 for row in all_units if row["chiave_classi_confrontabile"] == 0),
         "managements": ["statale", "paritaria"],
