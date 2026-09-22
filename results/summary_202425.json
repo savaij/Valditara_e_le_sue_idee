@@ -1,0 +1,25 @@
+{
+  "generated_on": "2026-09-22",
+  "school_year": "2024/25",
+  "threshold": 0.3,
+  "formula": "M_min = max(0, ceil(F - 0.30*N))",
+  "unit_key": [
+    "tipo_gestione",
+    "CODICESCUOLA",
+    "ORDINESCUOLA",
+    "ANNOCORSO"
+  ],
+  "units": 134784,
+  "units_above_30": 13806,
+  "students": 6515638,
+  "non_italian_students": 762050,
+  "students_in_units_above_30": 542790,
+  "non_italian_students_in_units_above_30": 231586,
+  "m_min_in_units_above_30": 75373,
+  "anagrafe_missing_units": 0,
+  "class_exact_key_missing_units": 4910,
+  "managements": [
+    "statale",
+    "paritaria"
+  ]
+}
