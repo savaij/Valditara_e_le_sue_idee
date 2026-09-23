@@ -72,11 +72,18 @@ di confronto.
 ## Algoritmo di assegnazione
 
 Per ciascun gruppo (tipo_gestione, ordine_scuola, anno_corso):
-1. le unità di origine sono processate in ordine deterministico (quota di non
-   italiani decrescente, poi codice_scuola) — non è un piano di assegnazione
-   ottimale (servirebbe un problema di trasporto/flusso a costo minimo), ma
-   un'euristica greedy trasparente e riproducibile: priorità alle unità più
-   sopra soglia;
+1. le unità di origine sono processate in un ordine che determina chi ha la
+   priorità sui posti disponibili nelle destinazioni condivise dal gruppo. Di
+   default l'ordine è deterministico (quota di non italiani decrescente, poi
+   codice_scuola): priorità alle unità più sopra soglia. Non è un piano di
+   assegnazione ottimale (servirebbe un problema di trasporto/flusso a costo
+   minimo) ma un'euristica greedy trasparente e riproducibile. Con
+   `--ordine-origine-casuale` l'ordine è invece una permutazione casuale
+   (via seed) ricalcolata per ciascun gruppo: utile per una simulazione
+   Monte Carlo sulla sensibilità del flusso di riallocazione all'ordine di
+   elaborazione, che a parità di `quota_campione` (anche 1.00, cioè senza
+   alcuna componente binomiale) può cambiare quali unità ottengono i posti
+   più vicini quando più origini competono per le stesse destinazioni;
 2. per ciascuna unità di origine, si cercano le destinazioni con posti
    disponibili più vicine (ricerca a griglia con anelli crescenti, poi
    distanza geodetica esatta - formula haversine, coordinate dal file di
@@ -382,6 +389,11 @@ def parse_args() -> argparse.Namespace:
                          help="Percentile empirico usato come capienza massima per classe (default 95).")
     parser.add_argument("--consenti-cambio-gestione", action="store_true",
                          help="Permette destinazioni con tipo_gestione diverso dall'origine (default: no).")
+    parser.add_argument("--ordine-origine-casuale", action="store_true",
+                         help="Processa le unità di origine di ciascun gruppo in un ordine casuale "
+                              "(permutazione via seed) invece dell'euristica per severità decrescente. "
+                              "Usato per la simulazione Monte Carlo sulla sensibilità del flusso greedy "
+                              "all'ordine di elaborazione (default: no, ordine deterministico).")
     parser.add_argument("--max-km", type=float, default=None,
                          help="Se impostato, oltre questa distanza (km) lo spostamento è considerato non realistico "
                               "e il residuo viene marcato non riallocabile invece di essere assegnato.")
@@ -479,10 +491,14 @@ def main() -> None:
         ncols_span = max(d.lon for d in group_dests) - min(d.lon for d in group_dests)
         max_ring = int(max(nrows_span, ncols_span) / GRID_CELL_DEG) + 4
 
-        ordered_sources = sorted(
-            group_sources,
-            key=lambda u: (-(u.alunni_non_italiani / u.alunni_totali), u.codice_scuola),
-        )
+        if args.ordine_origine_casuale:
+            perm = rng.permutation(len(group_sources))
+            ordered_sources = [group_sources[i] for i in perm]
+        else:
+            ordered_sources = sorted(
+                group_sources,
+                key=lambda u: (-(u.alunni_non_italiani / u.alunni_totali), u.codice_scuola),
+            )
         for u in ordered_sources:
             key = f"{u.tipo_gestione}|{u.codice_scuola}|{u.ordine_scuola}|{u.anno_corso}"
             needed = sampled[key]
@@ -547,6 +563,8 @@ def main() -> None:
                 )
 
     suffix = f"q{int(round(args.quota_campione * 100)):03d}_seed{args.seed}"
+    if args.ordine_origine_casuale:
+        suffix += "_ordcas"
     write_csv(RESULTS / f"simulazione_spostamenti_dettaglio_{YEAR}_{suffix}.csv", detail_rows, DETAIL_FIELDS)
     write_csv(RESULTS / f"simulazione_non_riallocabili_{YEAR}_{suffix}.csv", unallocated_rows, UNALLOCATED_FIELDS)
 
@@ -619,6 +637,7 @@ def main() -> None:
        "Deve essere 0: assegnati + non_riallocati deve sempre coincidere col campione.")
     qc("capienza_percentile_usato", args.capienza_percentile)
     qc("cambio_gestione_consentito", int(args.consenti_cambio_gestione))
+    qc("ordine_origine_casuale", int(args.ordine_origine_casuale))
     qc("max_km_applicato", args.max_km if args.max_km is not None else "nessuno")
 
     write_csv(RESULTS / f"controlli_qualita_simulazione_{YEAR}_{suffix}.csv", qc_rows, QC_FIELDS)
@@ -659,6 +678,7 @@ def main() -> None:
         "seed": args.seed,
         "capienza_percentile": args.capienza_percentile,
         "consenti_cambio_gestione": args.consenti_cambio_gestione,
+        "ordine_origine_casuale": args.ordine_origine_casuale,
         "max_km_applicato": args.max_km,
         "nota_campionamento": (
             "quota_campione applica un campionamento Binomiale(m_min, quota_campione) "
