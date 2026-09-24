@@ -1,0 +1,47 @@
+anno_scolastico,tipo_gestione,dataset,passaggio,esito,righe,plessi,alunni,nota
+202425,statale,anagrafe,caricamento,codici_unici,51704,51704,,50515 righe standard + 1189 autonome; 0 codici duplicati scartati (si tiene il primo).
+202425,statale,anagrafe,join con cittadinanza,codice_presente_in_cittadinanza,28040,28040,,
+202425,statale,anagrafe,join con cittadinanza,codice_assente_da_cittadinanza,23664,23664,,"Plessi senza alunni di primaria/secondaria: infanzia, sedi di istituto, plessi chiusi."
+202425,statale,cittadinanza,caricamento,righe_totali,119793,28040,6172717,
+202425,statale,cittadinanza,join con anagrafe,esclusa_anagrafe_mancante,0,0,0,
+202425,statale,cittadinanza,join con anagrafe,esclusa_caratteristica: PERCORSO II LIVELLO,3257,1180,76783,
+202425,statale,cittadinanza,join con anagrafe,esclusa_caratteristica: ANNESSO A CONVITTO,586,134,36036,
+202425,statale,cittadinanza,join con anagrafe,esclusa_caratteristica: CONVITTO ANNESSO,473,93,29182,
+202425,statale,cittadinanza,join con anagrafe,esclusa_caratteristica: SCUOLA ANNESSA,224,45,17337,
+202425,statale,cittadinanza,join con anagrafe,esclusa_caratteristica: ISOLANO,385,87,11658,
+202425,statale,cittadinanza,join con anagrafe,esclusa_caratteristica: SPEC. PER CARCERARI,519,172,6965,
+202425,statale,cittadinanza,join con anagrafe,esclusa_caratteristica: ANN. A EDUCANDATO,78,18,6220,
+202425,statale,cittadinanza,join con anagrafe,esclusa_caratteristica: SLOVENO,202,44,3154,
+202425,statale,cittadinanza,join con anagrafe,esclusa_caratteristica: DI MONTAGNA,354,79,2632,
+202425,statale,cittadinanza,join con anagrafe,esclusa_caratteristica: SPERIMENTALE PER DM,12,4,680,
+202425,statale,cittadinanza,join con anagrafe,esclusa_caratteristica: PER SORDOMUTI,18,4,669,
+202425,statale,cittadinanza,join con anagrafe,esclusa_caratteristica: PER CIECHI,9,3,376,
+202425,statale,cittadinanza,join con anagrafe,esclusa_caratteristica: SPEC. PER SORDOMUTI,5,1,80,
+202425,statale,cittadinanza,join con anagrafe,esclusa_caratteristica: SPECIALE PER CIECHI,1,1,26,
+202425,statale,cittadinanza,join con anagrafe,esclusa_caratteristica: ANN. A ISTITUTO ARTE,3,1,18,
+202425,statale,cittadinanza,join con anagrafe,esclusa_caratteristica: C/O IST. OSPEDALIERO,2,2,3,
+202425,statale,cittadinanza,join con anagrafe,inclusa_nell_analisi,113665,26172,5980898,Solo caratteristica NORMALE.
+202425,statale,cittadinanza (incluse),join con classi,chiave_classi_esatta,109020,25652,5954672,
+202425,statale,cittadinanza (incluse),join con classi,senza_chiave_classi_plesso_con_pluriclassi,4645,1329,26226,Alunni in pluriclasse: nel flusso classi sono sotto l'anno di corso 7.
+202425,statale,cittadinanza (incluse),join con classi,senza_chiave_classi_altro,0,0,0,
+202425,statale,classi,caricamento,righe_totali,116317,28040,6172717,
+202425,statale,classi,join con cittadinanza,unita_a_unita_incluse,109020,25652,5954494,
+202425,statale,classi,join con cittadinanza,plesso_incluso_anno_7_pluriclasse,1335,1335,26404,Non unibili per costruzione: la pluriclasse mescola più anni di corso.
+202425,statale,classi,join con cittadinanza,plesso_incluso_chiave_senza_unita,0,0,0,
+202425,statale,classi,join con cittadinanza,plesso_escluso_dall_analisi,5962,1868,191819,Plessi scartati nel join cittadinanza-anagrafe (caratteristica o anagrafe mancante).
+202425,statale,classi,join con cittadinanza,plesso_assente_da_cittadinanza,0,0,0,
+202425,paritaria,anagrafe,caricamento,codici_unici,11565,11565,,11497 righe standard + 68 autonome; 0 codici duplicati scartati (si tiene il primo).
+202425,paritaria,anagrafe,join con cittadinanza,codice_presente_in_cittadinanza,3473,3473,,
+202425,paritaria,anagrafe,join con cittadinanza,codice_assente_da_cittadinanza,8092,8092,,"Plessi senza alunni di primaria/secondaria: infanzia, sedi di istituto, plessi chiusi."
+202425,paritaria,cittadinanza,caricamento,righe_totali,14991,3473,342921,
+202425,paritaria,cittadinanza,join con anagrafe,esclusa_anagrafe_mancante,0,0,0,
+202425,paritaria,cittadinanza,join con anagrafe,inclusa_nell_analisi,14991,3473,342921,Filtro sulla caratteristica non applicabile: campo assente nell'anagrafe paritarie.
+202425,paritaria,cittadinanza (incluse),join con classi,chiave_classi_esatta,14949,3469,342674,
+202425,paritaria,cittadinanza (incluse),join con classi,senza_chiave_classi_plesso_con_pluriclassi,42,17,247,Alunni in pluriclasse: nel flusso classi sono sotto l'anno di corso 7.
+202425,paritaria,cittadinanza (incluse),join con classi,senza_chiave_classi_altro,0,0,0,
+202425,paritaria,classi,caricamento,righe_totali,14966,3473,342921,
+202425,paritaria,classi,join con cittadinanza,unita_a_unita_incluse,14949,3469,342674,
+202425,paritaria,classi,join con cittadinanza,plesso_incluso_anno_7_pluriclasse,17,17,247,Non unibili per costruzione: la pluriclasse mescola più anni di corso.
+202425,paritaria,classi,join con cittadinanza,plesso_incluso_chiave_senza_unita,0,0,0,
+202425,paritaria,classi,join con cittadinanza,plesso_escluso_dall_analisi,0,0,0,Plessi scartati nel join cittadinanza-anagrafe (caratteristica o anagrafe mancante).
+202425,paritaria,classi,join con cittadinanza,plesso_assente_da_cittadinanza,0,0,0,

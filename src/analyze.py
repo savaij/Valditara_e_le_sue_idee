@@ -1,24 +1,23 @@
 #!/usr/bin/env python3
-"""Analisi riproducibile del criterio del 30% - MIM a.s. 2024/25.
+"""Analisi del criterio del 30% sui dati MIM dell'a.s. 2024/25.
 
-Dipendenze: sola libreria standard Python 3.10+.
+La base statistica è il flusso MIM per cittadinanza. Il flusso classi/studenti
+serve per controllare i totali e aggiungere il numero di classi quando la
+chiave del corso coincide. Le anagrafiche sono unite tramite CodiceScuola.
 
-La base statistica dell'analisi è il flusso MIM per cittadinanza. Il flusso
-classi/studenti viene usato come controllo indipendente del totale studenti e
-per allegare il numero di classi quando la chiave corso è confrontabile. Le
-anagrafiche sono unite per CodiceScuola (plesso).
+Si analizzano solo le scuole statali con caratteristica anagrafica NORMALE e
+tutte le paritarie (la cui anagrafe non ha il campo). Le righe perse nei join
+sono tracciate in results/controlli_join_<anno>.csv.
 """
 
 from __future__ import annotations
 
-import csv
 import hashlib
 import json
-import math
-from collections import Counter, defaultdict
 from datetime import date
 from pathlib import Path
-from typing import Iterable
+
+import pandas as pd
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,6 +29,9 @@ YEAR = "202425"
 YEAR_LABEL = "2024/25"
 THRESHOLD_NUM = 3
 THRESHOLD_DEN = 10
+# Solo le statali hanno DESCRIZIONECARATTERISTICASCUOLA; le paritarie non vengono filtrate.
+CARATTERISTICA_AMMESSA = "NORMALE"
+CARATTERISTICA_NON_DISPONIBILE = "NON DISPONIBILE (PARITARIA)"
 
 
 UNIT_FIELDS = [
@@ -49,6 +51,7 @@ UNIT_FIELDS = [
     "indirizzo_scuola",
     "cap_scuola",
     "tipo_scuola_anagrafe",
+    "caratteristica_scuola",
     "fonte_anagrafe",
     "anagrafe_mappata",
     "alunni_italiani",
@@ -64,7 +67,6 @@ UNIT_FIELDS = [
     "delta_n_cittadinanza_meno_classi",
     "chiave_classi_confrontabile",
 ]
-
 
 AGG_FIELDS = [
     "anno_scolastico",
@@ -94,32 +96,85 @@ AGG_FIELDS = [
     "unita_senza_chiave_classi_esatta",
 ]
 
+EXCLUDED_FIELDS = [
+    "anno_scolastico",
+    "tipo_gestione",
+    "codice_scuola",
+    "denominazione_scuola",
+    "codice_istituto_riferimento",
+    "ordine_scuola",
+    "anno_corso",
+    "regione",
+    "provincia",
+    "comune",
+    "tipo_scuola_anagrafe",
+    "caratteristica_scuola",
+    "alunni_italiani",
+    "alunni_non_italiani",
+    "alunni_totali",
+    "motivo_esclusione",
+]
 
-def read_csv(path: Path) -> list[dict[str, str]]:
-    """Read a MIM CSV, preserving identifiers as strings."""
+JOIN_QC_FIELDS = [
+    "anno_scolastico",
+    "tipo_gestione",
+    "dataset",
+    "passaggio",
+    "esito",
+    "righe",
+    "plessi",
+    "alunni",
+    "nota",
+]
 
-    with path.open("r", encoding="utf-8-sig", newline="") as handle:
-        return list(csv.DictReader(handle))
+
+def read_csv(path: Path) -> pd.DataFrame:
+    """Legge tutti i campi come testo, preservando codici e campi vuoti."""
+
+    return pd.read_csv(
+        path,
+        dtype=str,
+        encoding="utf-8-sig",
+        keep_default_na=False,
+    )
 
 
-def write_csv(path: Path, rows: Iterable[dict[str, object]], fields: list[str]) -> None:
+def write_csv(
+    path: Path,
+    rows: pd.DataFrame | list[dict[str, object]],
+    fields: list[str],
+) -> None:
+    """Scrive le colonne richieste con lo stesso formato CSV usato finora."""
+
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fields, extrasaction="ignore")
-        writer.writeheader()
-        for row in rows:
-            writer.writerow({field: row.get(field, "") for field in fields})
+    table = rows if isinstance(rows, pd.DataFrame) else pd.DataFrame(rows, columns=fields)
+    table.to_csv(
+        path,
+        columns=fields,
+        index=False,
+        encoding="utf-8",
+        lineterminator="\r\n",
+        na_rep="",
+    )
 
 
-def as_int(value: str | int | None) -> int | None:
-    if value is None:
-        return None
-    text = str(value).strip()
-    return int(text) if text else None
+def text_column(table: pd.DataFrame, field: str) -> pd.Series:
+    """Normalizza un campo testuale senza convertirne gli identificativi."""
+
+    return table[field].astype(str).str.strip()
 
 
-def as_text(value: str | None) -> str:
-    return (value or "").strip()
+def integer_column(table: pd.DataFrame, field: str) -> pd.Series:
+    """Converte un campo numerico MIM in interi; i vuoti valgono zero."""
+
+    values = text_column(table, field).replace("", "0")
+    return values.map(int).astype("int64")
+
+
+def numeric_sum(values: pd.Series) -> int:
+    """Somma valori numerici che possono contenere stringhe vuote."""
+
+    return int(pd.to_numeric(values, errors="coerce").fillna(0).sum())
 
 
 def pct(numerator: int, denominator: int) -> str:
@@ -128,50 +183,27 @@ def pct(numerator: int, denominator: int) -> str:
     return f"{numerator / denominator:.6f}"
 
 
-def ratio_float(numerator: int, denominator: int) -> float | None:
-    if denominator == 0:
-        return None
-    return numerator / denominator
-
-
 def ceil_excess_con_sostituzione(f: int, n: int) -> int:
-    """Formula originaria: max(0, ceil(F - 0.30*N)).
+    """Formula legacy, valida solo se ogni studente spostato viene sostituito."""
 
-    Valida SOLO sotto l'ipotesi che ogni studente spostato sia sostituito da
-    un altro studente, cioè N resta costante. Mantenuta come valore legacy
-    per confronto: vedi ``ceil_excess_senza_sostituzione`` per la quantità
-    usata come indicatore principale a partire da questa revisione.
-    """
-
-    excess_tenths = THRESHOLD_DEN * f - THRESHOLD_NUM * n
-    if excess_tenths <= 0:
+    excess = THRESHOLD_DEN * f - THRESHOLD_NUM * n
+    if excess <= 0:
         return 0
-    return (excess_tenths + THRESHOLD_DEN - 1) // THRESHOLD_DEN
+    return (excess + THRESHOLD_DEN - 1) // THRESHOLD_DEN
 
 
 def ceil_excess_senza_sostituzione(f: int, n: int) -> tuple[int | None, bool]:
-    """Minimo m tale che (F-m)/(N-m) <= 0.30, con m spostati e NON sostituiti.
-
-    A differenza della formula "con sostituzione", qui anche N diminuisce di
-    m (lo studente spostato lascia l'unità e non viene rimpiazzato). Risolvendo
-    10*(F-m) <= 3*(N-m) per il minimo intero m si ottiene
-    m = ceil(max(0, 10F - 3N) / 7), con aritmetica intera esatta.
-
-    Caso limite genuino: se l'unità non ha alunni con cittadinanza italiana
-    (N == F > 0), rimuovere solo alunni non italiani non altera mai la quota
-    (resta 100% finché resta almeno uno studente): è matematicamente
-    irrisolvibile per pura sottrazione, senza importare alunni italiani.
-    In questo caso la funzione restituisce (None, True).
-    """
+    """Minimo m con (F-m)/(N-m) <= 30%, spostando alunni senza sostituzione."""
 
     if n == f and f > 0:
         return None, True
-    excess_sevenths = THRESHOLD_DEN * f - THRESHOLD_NUM * n
-    if excess_sevenths <= 0:
+
+    excess = THRESHOLD_DEN * f - THRESHOLD_NUM * n
+    if excess <= 0:
         return 0, False
-    denom = THRESHOLD_DEN - THRESHOLD_NUM  # 10 - 3 = 7
-    m = (excess_sevenths + denom - 1) // denom
-    return m, False
+
+    denominator = THRESHOLD_DEN - THRESHOLD_NUM
+    return (excess + denominator - 1) // denominator, False
 
 
 def source_path(dataset: str, management: str) -> Path:
@@ -179,19 +211,15 @@ def source_path(dataset: str, management: str) -> Path:
     return RAW / f"{dataset}{suffix}{YEAR}20250831.csv"
 
 
-def load_registry(management: str) -> tuple[dict[str, dict[str, str]], dict[str, int]]:
-    """Load standard and autonomous-province school registries by plesso code."""
+def load_registry(management: str) -> tuple[pd.DataFrame, dict[str, int]]:
+    """Unisce le anagrafiche standard e autonome, mantenendo il primo codice."""
 
     suffix = "STAT" if management == "statale" else "PAR"
-    standard_path = RAW / f"SCUANAGRAFE{suffix}{YEAR}20250831.csv"
-    autonomous_path = RAW / f"SCUANAAUT{suffix}{YEAR}20250831.csv"
-
-    registry: dict[str, dict[str, str]] = {}
-    diagnostics = {
-        "standard_rows": 0,
-        "autonomous_rows": 0,
-        "duplicate_codes": 0,
-    }
+    standard = read_csv(RAW / f"SCUANAGRAFE{suffix}{YEAR}20250831.csv")
+    autonomous = read_csv(RAW / f"SCUANAAUT{suffix}{YEAR}20250831.csv")
+    standard["fonte_anagrafe"] = "standard"
+    autonomous["fonte_anagrafe"] = "autonome"
+    rows = pd.concat([standard, autonomous], ignore_index=True)
 
     common_fields = {
         "area_geografica": "AREAGEOGRAFICA",
@@ -205,253 +233,456 @@ def load_registry(management: str) -> tuple[dict[str, dict[str, str]], dict[str,
         "comune": "DESCRIZIONECOMUNE",
         "tipo_scuola_anagrafe": "DESCRIZIONETIPOLOGIAGRADOISTRUZIONESCUOLA",
     }
+    rows["codice_scuola"] = text_column(rows, "CODICESCUOLA")
+    rows = rows.loc[rows["codice_scuola"].ne("")].copy()
+    duplicate_codes = int(rows["codice_scuola"].duplicated().sum())
+    rows = rows.drop_duplicates("codice_scuola", keep="first").copy()
 
-    def add(path: Path, source: str, include_reference: bool) -> None:
-        rows = read_csv(path)
-        if source == "standard":
-            diagnostics["standard_rows"] = len(rows)
-        else:
-            diagnostics["autonomous_rows"] = len(rows)
-        for raw in rows:
-            code = as_text(raw.get("CODICESCUOLA"))
-            if not code:
-                continue
-            if code in registry:
-                diagnostics["duplicate_codes"] += 1
-                continue
-            item = {
-                "fonte_anagrafe": source,
-                "anagrafe_mappata": "1",
-                "codice_istituto_riferimento": as_text(raw.get("CODICEISTITUTORIFERIMENTO"))
-                if include_reference
-                else "",
-                "denominazione_istituto_riferimento": as_text(
-                    raw.get("DENOMINAZIONEISTITUTORIFERIMENTO")
-                )
-                if include_reference
-                else "",
-            }
-            for target, field in common_fields.items():
-                item[target] = as_text(raw.get(field))
-            registry[code] = item
+    for target, source in common_fields.items():
+        rows[target] = text_column(rows, source)
 
-    add(standard_path, "standard", management == "statale")
-    add(autonomous_path, "autonome", management == "statale")
-    return registry, diagnostics
+    # Codice istituto e caratteristica esistono solo nelle anagrafiche statali.
+    is_state = management == "statale"
+    rows["codice_istituto_riferimento"] = (
+        text_column(rows, "CODICEISTITUTORIFERIMENTO") if is_state else ""
+    )
+    rows["denominazione_istituto_riferimento"] = (
+        text_column(rows, "DENOMINAZIONEISTITUTORIFERIMENTO") if is_state else ""
+    )
+    rows["caratteristica_scuola"] = (
+        text_column(rows, "DESCRIZIONECARATTERISTICASCUOLA")
+        if is_state
+        else CARATTERISTICA_NON_DISPONIBILE
+    )
+    rows["anagrafe_mappata"] = "1"
+
+    registry_fields = [
+        "codice_scuola",
+        "denominazione_scuola",
+        "codice_istituto_riferimento",
+        "denominazione_istituto_riferimento",
+        "area_geografica",
+        "regione",
+        "provincia",
+        "codice_comune",
+        "comune",
+        "indirizzo_scuola",
+        "cap_scuola",
+        "tipo_scuola_anagrafe",
+        "caratteristica_scuola",
+        "fonte_anagrafe",
+        "anagrafe_mappata",
+    ]
+    diagnostics = {
+        "standard_rows": len(standard),
+        "autonomous_rows": len(autonomous),
+        "duplicate_codes": duplicate_codes,
+    }
+    return rows.loc[:, registry_fields], diagnostics
 
 
-def load_class_index(management: str) -> tuple[dict[tuple[str, str, str], dict[str, int]], dict[str, int]]:
-    """Index classi/studenti on the exact course key; course 7 is not exact."""
+def load_class_index(
+    management: str,
+) -> tuple[pd.DataFrame, dict[str, int]]:
+    """Prepara il flusso classi/studenti; l'anno 7 non è una chiave esatta."""
 
-    path = source_path("ALUCORSOINDCLA", management)
-    rows = read_csv(path)
-    index: dict[tuple[str, str, str], dict[str, int]] = {}
+    rows = read_csv(source_path("ALUCORSOINDCLA", management))
+    key_fields = ["CODICESCUOLA", "ORDINESCUOLA", "ANNOCORSOCLASSE"]
+    for field in key_fields:
+        rows[field] = text_column(rows, field)
+
+    rows["classi"] = integer_column(rows, "CLASSI")
+    rows["alunni_classi"] = integer_column(rows, "ALUNNIMASCHI") + integer_column(
+        rows, "ALUNNIFEMMINE"
+    )
+    rows["anno_7"] = rows["ANNOCORSOCLASSE"].eq("7")
+    duplicate_keys = int(rows.loc[~rows["anno_7"]].duplicated(key_fields).sum())
+    rows = rows.rename(
+        columns={
+            "CODICESCUOLA": "codice_scuola",
+            "ORDINESCUOLA": "ordine_scuola",
+            "ANNOCORSOCLASSE": "anno_corso",
+        }
+    )
+
     diagnostics = {
         "rows": len(rows),
-        "rows_course_7": 0,
-        "students_total": 0,
-        "classes_total": 0,
-        "duplicate_keys": 0,
+        "rows_course_7": int(rows["anno_7"].sum()),
+        "students_total": int(rows["alunni_classi"].sum()),
+        "classes_total": int(rows["classi"].sum()),
+        "duplicate_keys": duplicate_keys,
     }
-    for raw in rows:
-        code = as_text(raw.get("CODICESCUOLA"))
-        order = as_text(raw.get("ORDINESCUOLA"))
-        course = as_text(raw.get("ANNOCORSOCLASSE"))
-        classes = as_int(raw.get("CLASSI")) or 0
-        male = as_int(raw.get("ALUNNIMASCHI")) or 0
-        female = as_int(raw.get("ALUNNIFEMMINE")) or 0
-        students = male + female
-        diagnostics["students_total"] += students
-        diagnostics["classes_total"] += classes
-        if course == "7":
-            diagnostics["rows_course_7"] += 1
-            continue
-        key = (code, order, course)
-        if key in index:
-            diagnostics["duplicate_keys"] += 1
-            continue
-        index[key] = {"classi": classes, "alunni_classi": students}
-    return index, diagnostics
+    # Tutte le righe, anno 7 incluso: servono anche per il controllo dei join.
+    return (
+        rows.loc[
+            :,
+            ["codice_scuola", "ordine_scuola", "anno_corso", "anno_7", "classi", "alunni_classi"],
+        ],
+        diagnostics,
+    )
 
 
-def load_units(management: str) -> tuple[list[dict[str, object]], dict[str, object]]:
+def join_row(
+    management: str,
+    dataset: str,
+    step: str,
+    outcome: str,
+    table: pd.DataFrame,
+    students_field: str | None,
+    note: str = "",
+) -> dict[str, object]:
+    """Una riga del controllo sui join: quante righe, plessi e alunni finiscono in un esito."""
+
+    return {
+        "anno_scolastico": YEAR,
+        "tipo_gestione": management,
+        "dataset": dataset,
+        "passaggio": step,
+        "esito": outcome,
+        "righe": len(table),
+        "plessi": int(table["codice_scuola"].nunique()),
+        "alunni": int(table[students_field].sum()) if students_field else "",
+        "nota": note,
+    }
+
+
+def build_join_qc(
+    management: str,
+    registry: pd.DataFrame,
+    registry_diag: dict[str, int],
+    class_index: pd.DataFrame,
+    all_units: pd.DataFrame,
+    units: pd.DataFrame,
+    course_key: list[str],
+) -> list[dict[str, object]]:
+    """Traccia dove finiscono le righe di anagrafe, cittadinanza e classi nei join.
+
+    Per ogni dataset gli esiti del passaggio "join" sono disgiunti e sommano al
+    totale del passaggio "caricamento".
+    """
+
+    rows: list[dict[str, object]] = []
+    n_field = "alunni_totali"
+
+    # Anagrafe
+    citizenship_codes = set(all_units["codice_scuola"])
+    rows.append(
+        join_row(
+            management, "anagrafe", "caricamento", "codici_unici", registry, None,
+            f"{registry_diag['standard_rows']} righe standard + "
+            f"{registry_diag['autonomous_rows']} autonome; "
+            f"{registry_diag['duplicate_codes']} codici duplicati scartati (si tiene il primo).",
+        )
+    )
+    in_citizenship = registry["codice_scuola"].isin(citizenship_codes)
+    rows.append(
+        join_row(
+            management, "anagrafe", "join con cittadinanza", "codice_presente_in_cittadinanza",
+            registry.loc[in_citizenship], None,
+        )
+    )
+    rows.append(
+        join_row(
+            management, "anagrafe", "join con cittadinanza", "codice_assente_da_cittadinanza",
+            registry.loc[~in_citizenship], None,
+            "Plessi senza alunni di primaria/secondaria: infanzia, sedi di istituto, plessi chiusi.",
+        )
+    )
+
+    # Cittadinanza
+    rows.append(join_row(management, "cittadinanza", "caricamento", "righe_totali", all_units, n_field))
+    reasons = all_units["motivo_esclusione"]
+    rows.append(
+        join_row(
+            management, "cittadinanza", "join con anagrafe", "esclusa_anagrafe_mancante",
+            all_units.loc[reasons.eq("anagrafe_mancante")], n_field,
+        )
+    )
+    not_normal = all_units.loc[reasons.eq("caratteristica_non_normale")]
+    by_characteristic = (
+        not_normal.groupby("caratteristica_scuola")[n_field].sum().sort_values(ascending=False)
+    )
+    for characteristic in by_characteristic.index:
+        rows.append(
+            join_row(
+                management, "cittadinanza", "join con anagrafe",
+                f"esclusa_caratteristica: {characteristic}",
+                not_normal.loc[not_normal["caratteristica_scuola"].eq(characteristic)], n_field,
+            )
+        )
+    rows.append(
+        join_row(
+            management, "cittadinanza", "join con anagrafe", "inclusa_nell_analisi",
+            all_units.loc[reasons.eq("")], n_field,
+            f"Solo caratteristica {CARATTERISTICA_AMMESSA}."
+            if management == "statale"
+            else "Filtro sulla caratteristica non applicabile: campo assente nell'anagrafe paritarie.",
+        )
+    )
+
+    # Unità incluse rispetto al flusso classi (sottoinsieme di "inclusa_nell_analisi")
+    course_seven_codes = set(class_index.loc[class_index["anno_7"], "codice_scuola"])
+    matched = units["chiave_classi_confrontabile"].eq(1)
+    in_course_seven = units["codice_scuola"].isin(course_seven_codes)
+    rows.append(
+        join_row(
+            management, "cittadinanza (incluse)", "join con classi", "chiave_classi_esatta",
+            units.loc[matched], n_field,
+        )
+    )
+    rows.append(
+        join_row(
+            management, "cittadinanza (incluse)", "join con classi",
+            "senza_chiave_classi_plesso_con_pluriclassi",
+            units.loc[~matched & in_course_seven], n_field,
+            "Alunni in pluriclasse: nel flusso classi sono sotto l'anno di corso 7.",
+        )
+    )
+    rows.append(
+        join_row(
+            management, "cittadinanza (incluse)", "join con classi",
+            "senza_chiave_classi_altro",
+            units.loc[~matched & ~in_course_seven], n_field,
+        )
+    )
+
+    # Classi
+    class_field = "alunni_classi"
+    included_codes = set(units["codice_scuola"])
+    excluded_codes = citizenship_codes - included_codes
+    included_keys = units.loc[:, course_key].assign(_unita_inclusa=True)
+    classes = class_index.merge(included_keys, on=course_key, how="left", sort=False)
+    classes["_unita_inclusa"] = classes["_unita_inclusa"].eq(True)
+    plesso_included = classes["codice_scuola"].isin(included_codes)
+    rows.append(join_row(management, "classi", "caricamento", "righe_totali", classes, class_field))
+    rows.append(
+        join_row(
+            management, "classi", "join con cittadinanza", "unita_a_unita_incluse",
+            classes.loc[plesso_included & ~classes["anno_7"] & classes["_unita_inclusa"]],
+            class_field,
+        )
+    )
+    rows.append(
+        join_row(
+            management, "classi", "join con cittadinanza", "plesso_incluso_anno_7_pluriclasse",
+            classes.loc[plesso_included & classes["anno_7"]], class_field,
+            "Non unibili per costruzione: la pluriclasse mescola più anni di corso.",
+        )
+    )
+    rows.append(
+        join_row(
+            management, "classi", "join con cittadinanza", "plesso_incluso_chiave_senza_unita",
+            classes.loc[plesso_included & ~classes["anno_7"] & ~classes["_unita_inclusa"]],
+            class_field,
+        )
+    )
+    rows.append(
+        join_row(
+            management, "classi", "join con cittadinanza", "plesso_escluso_dall_analisi",
+            classes.loc[classes["codice_scuola"].isin(excluded_codes)], class_field,
+            "Plessi scartati nel join cittadinanza-anagrafe (caratteristica o anagrafe mancante).",
+        )
+    )
+    rows.append(
+        join_row(
+            management, "classi", "join con cittadinanza", "plesso_assente_da_cittadinanza",
+            classes.loc[~classes["codice_scuola"].isin(citizenship_codes)], class_field,
+        )
+    )
+    return rows
+
+
+def load_units(
+    management: str,
+) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, object], list[dict[str, object]]]:
+    """Carica le unità per cittadinanza, le filtra e vi unisce anagrafe e classi.
+
+    Restituisce le unità incluse, quelle escluse con il motivo, le diagnostiche
+    e il controllo dei join.
+    """
+
     registry, registry_diag = load_registry(management)
     class_index, class_diag = load_class_index(management)
-    cit_path = source_path("ALUITASTRACIT", management)
-    raw_units = read_csv(cit_path)
+    raw_units = read_csv(source_path("ALUITASTRACIT", management))
 
+    key_fields = ["CODICESCUOLA", "ORDINESCUOLA", "ANNOCORSO"]
+    for field in key_fields:
+        raw_units[field] = text_column(raw_units, field)
+
+    n = integer_column(raw_units, "ALUNNI")
+    italiani = integer_column(raw_units, "ALUNNICITTADINANZAITALIANA")
+    non_italiani = integer_column(raw_units, "ALUNNICITTADINANZANONITALIANA")
+
+    inconsistent = n.ne(italiani + non_italiani)
+    if inconsistent.any():
+        row = raw_units.loc[inconsistent].iloc[0]
+        key = (row["CODICESCUOLA"], row["ORDINESCUOLA"], row["ANNOCORSO"])
+        position = inconsistent[inconsistent].index[0]
+        raise ValueError(
+            f"ALUNNI != italiani + non italiani in {management} {key}: "
+            f"{n.loc[position]} != {italiani.loc[position]} + {non_italiani.loc[position]}"
+        )
+    else:
+        print("NESSUNA INCONSISTENZA SUL NUMERO DI ALUNNI. BENE!")
+    if n.le(0).any():
+        position = n[n.le(0)].index[0]
+        row = raw_units.loc[position]
+        key = (row["CODICESCUOLA"], row["ORDINESCUOLA"], row["ANNOCORSO"])
+        raise ValueError(f"ALUNNI non positivo in {management} {key}: {n.loc[position]}")
+
+    units = pd.DataFrame(
+        {
+            "anno_scolastico": YEAR,
+            "tipo_gestione": management,
+            "codice_scuola": raw_units["CODICESCUOLA"],
+            "ordine_scuola": raw_units["ORDINESCUOLA"],
+            "anno_corso": raw_units["ANNOCORSO"],
+            "alunni_italiani": italiani,
+            "alunni_non_italiani": non_italiani,
+            "alunni_totali": n,
+        }
+    )
+
+    # Il codice scuola identifica il plesso nell'anagrafe.
+    units = units.merge(registry, on="codice_scuola", how="left", sort=False)
+    registry_missing = units["fonte_anagrafe"].isna()
+    for field in registry.columns:
+        units[field] = units[field].fillna("")
+
+    # Si tengono solo i plessi presenti in anagrafe e, per le statali, con
+    # caratteristica NORMALE (esclusi serali, carceri, CPIA, ospedali, convitti...).
+    if management == "statale":
+        not_normal = ~registry_missing & units["caratteristica_scuola"].ne(CARATTERISTICA_AMMESSA)
+    else:
+        not_normal = pd.Series(False, index=units.index)
+    units["motivo_esclusione"] = ""
+    units.loc[registry_missing, "motivo_esclusione"] = "anagrafe_mancante"
+    units.loc[not_normal, "motivo_esclusione"] = "caratteristica_non_normale"
+    all_units = units
+    excluded = units.loc[units["motivo_esclusione"].ne("")].reset_index(drop=True)
+    units = units.loc[units["motivo_esclusione"].eq("")].reset_index(drop=True)
+    n = units["alunni_totali"]
+    non_italiani = units["alunni_non_italiani"]
+
+    # Per il flusso classi la chiave esatta è plesso + ordine + anno di corso.
+    course_key = ["codice_scuola", "ordine_scuola", "anno_corso"]
+    exact_classes = class_index.loc[~class_index["anno_7"]].drop_duplicates(course_key, keep="first")
+    units = units.merge(
+        exact_classes.drop(columns="anno_7"), on=course_key, how="left", sort=False
+    )
+    class_match = units["classi"].notna()
+    units["classi_esatte"] = [int(value) if pd.notna(value) else "" for value in units["classi"]]
+    units["alunni_classi_esatte"] = [
+        int(value) if pd.notna(value) else "" for value in units["alunni_classi"]
+    ]
+    units["delta_n_cittadinanza_meno_classi"] = [
+        int(total) - int(class_total) if matched else ""
+        for total, class_total, matched in zip(n, units["alunni_classi"], class_match)
+    ]
+    units["chiave_classi_confrontabile"] = class_match.astype("int64")
+
+    # Il confronto esatto evita arrotondamenti della percentuale.
+    excess = THRESHOLD_DEN * non_italiani - THRESHOLD_NUM * n
+    units["sopra_30"] = excess.gt(0).astype("int64")
+    minimums = [
+        ceil_excess_senza_sostituzione(int(f), int(total))
+        for f, total in zip(non_italiani, n)
+    ]
+    units["m_min"] = [minimum if not impossible else "" for minimum, impossible in minimums]
+    units["m_min_irrisolvibile"] = [int(impossible) for _, impossible in minimums]
+    units["m_min_con_sostituzione_legacy"] = [
+        ceil_excess_con_sostituzione(int(f), int(total)) for f, total in zip(non_italiani, n)
+    ]
+    units["quota_non_italiani"] = [
+        f"{int(f) / int(total):.6f}" for f, total in zip(non_italiani, n)
+    ]
+
+    join_rows = build_join_qc(
+        management, registry, registry_diag, class_index, all_units, units, course_key
+    )
+
+    above = units.loc[units["sopra_30"].eq(1)]
     diagnostics: dict[str, object] = {
         "management": management,
         "citizenship_rows": len(raw_units),
-        "citizenship_duplicate_keys": 0,
-        "citizenship_n_total": 0,
-        "citizenship_f_total": 0,
-        "citizenship_italiani_total": 0,
-        "above_30_units": 0,
-        "above_30_n_total": 0,
-        "above_30_f_total": 0,
-        "above_30_m_min_total": 0,
-        "above_30_m_min_con_sostituzione_total": 0,
-        "above_30_irrisolvibili": 0,
-        "registry_missing_units": 0,
-        "class_exact_matches": 0,
-        "class_missing_exact": 0,
-        "class_delta_nonzero": 0,
-        "class_delta_sum": 0,
+        "citizenship_duplicate_keys": int(raw_units.duplicated(key_fields).sum()),
+        "citizenship_n_total": int(all_units["alunni_totali"].sum()),
+        "citizenship_f_total": int(all_units["alunni_non_italiani"].sum()),
+        "citizenship_italiani_total": int(all_units["alunni_italiani"].sum()),
+        "excluded_units": len(excluded),
+        "excluded_n_total": int(excluded["alunni_totali"].sum()),
+        "excluded_f_total": int(excluded["alunni_non_italiani"].sum()),
+        "included_units": len(units),
+        "included_n_total": int(n.sum()),
+        "included_f_total": int(non_italiani.sum()),
+        "above_30_units": len(above),
+        "above_30_n_total": int(above["alunni_totali"].sum()),
+        "above_30_f_total": int(above["alunni_non_italiani"].sum()),
+        "above_30_m_min_total": numeric_sum(above["m_min"]),
+        "above_30_m_min_con_sostituzione_total": int(
+            above["m_min_con_sostituzione_legacy"].sum()
+        ),
+        "above_30_irrisolvibili": int(above["m_min_irrisolvibile"].sum()),
+        "registry_missing_units": int(registry_missing.sum()),
+        "class_exact_matches": int(class_match.sum()),
+        "class_missing_exact": int((~class_match).sum()),
+        "class_delta_nonzero": int(
+            pd.to_numeric(
+                units.loc[class_match, "delta_n_cittadinanza_meno_classi"]
+            ).ne(0).sum()
+        ),
+        "class_delta_sum": numeric_sum(units["delta_n_cittadinanza_meno_classi"]),
         "class_rows": class_diag["rows"],
         "class_course_7_rows": class_diag["rows_course_7"],
         "classes_students_total": class_diag["students_total"],
         "classes_total": class_diag["classes_total"],
+        "class_duplicate_keys": class_diag["duplicate_keys"],
         "registry_standard_rows": registry_diag["standard_rows"],
         "registry_autonomous_rows": registry_diag["autonomous_rows"],
         "registry_duplicate_codes": registry_diag["duplicate_codes"],
     }
-
-    seen_keys: set[tuple[str, str, str]] = set()
-    units: list[dict[str, object]] = []
-    for raw in raw_units:
-        code = as_text(raw.get("CODICESCUOLA"))
-        order = as_text(raw.get("ORDINESCUOLA"))
-        course = as_text(raw.get("ANNOCORSO"))
-        key = (code, order, course)
-        if key in seen_keys:
-            diagnostics["citizenship_duplicate_keys"] += 1
-        seen_keys.add(key)
-
-        n = as_int(raw.get("ALUNNI")) or 0
-        italiani = as_int(raw.get("ALUNNICITTADINANZAITALIANA")) or 0
-        non_italiani = as_int(raw.get("ALUNNICITTADINANZANONITALIANA")) or 0
-        if n != italiani + non_italiani:
-            raise ValueError(
-                f"ALUNNI != italiani + non italiani in {management} {key}: "
-                f"{n} != {italiani} + {non_italiani}"
-            )
-        if n <= 0:
-            raise ValueError(f"ALUNNI non positivo in {management} {key}: {n}")
-
-        registry_row = registry.get(code)
-        if registry_row is None:
-            diagnostics["registry_missing_units"] += 1
-            registry_row = {
-                "fonte_anagrafe": "mancante",
-                "anagrafe_mappata": "0",
-                "codice_istituto_riferimento": "",
-                "denominazione_istituto_riferimento": "",
-                "area_geografica": "NON DISPONIBILE",
-                "regione": "NON DISPONIBILE",
-                "provincia": "NON DISPONIBILE",
-                "codice_scuola": code,
-                "denominazione_scuola": "NON DISPONIBILE",
-                "indirizzo_scuola": "",
-                "cap_scuola": "",
-                "codice_comune": "NON DISPONIBILE",
-                "comune": "NON DISPONIBILE",
-                "tipo_scuola_anagrafe": "",
-            }
-
-        class_row = class_index.get(key)
-        class_exact = class_row is not None
-        classi_esatte = class_row["classi"] if class_row else ""
-        alunni_classi = class_row["alunni_classi"] if class_row else ""
-        delta = n - alunni_classi if class_exact else ""
-        if class_exact:
-            diagnostics["class_exact_matches"] += 1
-            diagnostics["class_delta_sum"] += delta
-            if delta != 0:
-                diagnostics["class_delta_nonzero"] += 1
-        else:
-            diagnostics["class_missing_exact"] += 1
-
-        above = THRESHOLD_DEN * non_italiani > THRESHOLD_NUM * n
-        m_min, irrisolvibile = ceil_excess_senza_sostituzione(non_italiani, n)
-        m_min_legacy = ceil_excess_con_sostituzione(non_italiani, n)
-        diagnostics["citizenship_n_total"] += n
-        diagnostics["citizenship_f_total"] += non_italiani
-        diagnostics["citizenship_italiani_total"] += italiani
-        if above:
-            diagnostics["above_30_units"] += 1
-            diagnostics["above_30_n_total"] += n
-            diagnostics["above_30_f_total"] += non_italiani
-            diagnostics["above_30_m_min_con_sostituzione_total"] += m_min_legacy
-            if irrisolvibile:
-                diagnostics["above_30_irrisolvibili"] += 1
-            else:
-                diagnostics["above_30_m_min_total"] += m_min
-
-        units.append(
-            {
-                "anno_scolastico": YEAR,
-                "tipo_gestione": management,
-                "codice_scuola": code,
-                "denominazione_scuola": registry_row["denominazione_scuola"],
-                "codice_istituto_riferimento": registry_row["codice_istituto_riferimento"],
-                "denominazione_istituto_riferimento": registry_row[
-                    "denominazione_istituto_riferimento"
-                ],
-                "ordine_scuola": order,
-                "anno_corso": course,
-                "area_geografica": registry_row["area_geografica"],
-                "regione": registry_row["regione"],
-                "provincia": registry_row["provincia"],
-                "codice_comune": registry_row["codice_comune"],
-                "comune": registry_row["comune"],
-                "indirizzo_scuola": registry_row["indirizzo_scuola"],
-                "cap_scuola": registry_row["cap_scuola"],
-                "tipo_scuola_anagrafe": registry_row["tipo_scuola_anagrafe"],
-                "fonte_anagrafe": registry_row["fonte_anagrafe"],
-                "anagrafe_mappata": registry_row["anagrafe_mappata"],
-                "alunni_italiani": italiani,
-                "alunni_non_italiani": non_italiani,
-                "alunni_totali": n,
-                "quota_non_italiani": f"{non_italiani / n:.6f}",
-                "sopra_30": 1 if above else 0,
-                "m_min": m_min if m_min is not None else "",
-                "m_min_irrisolvibile": 1 if irrisolvibile else 0,
-                "m_min_con_sostituzione_legacy": m_min_legacy,
-                "classi_esatte": classi_esatte,
-                "alunni_classi_esatte": alunni_classi,
-                "delta_n_cittadinanza_meno_classi": delta,
-                "chiave_classi_confrontabile": 1 if class_exact else 0,
-            }
-        )
-    return units, diagnostics
-
-
-def group_key(row: dict[str, object], fields: list[str]) -> tuple[str, ...]:
-    return tuple(str(row.get(field, "")) for field in fields)
+    return units.loc[:, UNIT_FIELDS], excluded.loc[:, EXCLUDED_FIELDS], diagnostics, join_rows
 
 
 def aggregate_rows(
-    rows: list[dict[str, object]],
+    rows: pd.DataFrame,
     level: str,
     group_fields: list[str],
     management_label: str,
-) -> list[dict[str, object]]:
-    grouped: defaultdict[tuple[str, ...], list[dict[str, object]]] = defaultdict(list)
-    for row in rows:
-        grouped[group_key(row, group_fields)].append(row)
+) -> pd.DataFrame:
+    """Calcola i totali per gruppo mantenendo il flag deciso a livello unità."""
 
-    output: list[dict[str, object]] = []
-    for key, members in grouped.items():
-        labels = dict(zip(group_fields, key))
-        flagged = [row for row in members if int(row["sopra_30"]) == 1]
-        all_n = sum(int(row["alunni_totali"]) for row in members)
-        all_f = sum(int(row["alunni_non_italiani"]) for row in members)
-        above_n = sum(int(row["alunni_totali"]) for row in flagged)
-        above_f = sum(int(row["alunni_non_italiani"]) for row in flagged)
-        above_irrisolvibili = sum(int(row["m_min_irrisolvibile"]) for row in flagged)
-        above_m = sum(
-            int(row["m_min"]) for row in flagged if row["m_min"] != ""
-        )
-        above_m_legacy = sum(int(row["m_min_con_sostituzione_legacy"]) for row in flagged)
-        exact_class_units = sum(int(row["chiave_classi_confrontabile"]) for row in members)
-        missing_class_units = len(members) - exact_class_units
-        classes_sum = sum(
-            int(row["classi_esatte"])
-            for row in members
-            if row["classi_esatte"] != ""
-        )
-        out: dict[str, object] = {
+    work = rows.copy()
+    flagged = work["sopra_30"]
+    work["_unita"] = 1
+    work["_irrisolvibili_sopra_30"] = work["m_min_irrisolvibile"] * flagged
+    work["_studenti_totali_sopra_30"] = work["alunni_totali"] * flagged
+    work["_studenti_non_italiani_sopra_30"] = work["alunni_non_italiani"] * flagged
+    work["_m_min_sopra_30"] = pd.to_numeric(work["m_min"], errors="coerce").fillna(0) * flagged
+    work["_m_min_legacy_sopra_30"] = work["m_min_con_sostituzione_legacy"] * flagged
+    work["_classi_esatte"] = pd.to_numeric(work["classi_esatte"], errors="coerce").fillna(0)
+
+    # Un campo costante permette di usare lo stesso groupby anche per il totale nazionale.
+    group_by = group_fields or ["_gruppo_unico"]
+    if not group_fields:
+        work["_gruppo_unico"] = "tutte"
+
+    grouped = work.groupby(group_by, sort=False, dropna=False).agg(
+        unita_totali=("_unita", "sum"),
+        unita_sopra_30=("sopra_30", "sum"),
+        unita_sopra_30_irrisolvibili=("_irrisolvibili_sopra_30", "sum"),
+        studenti_totali_sopra_30=("_studenti_totali_sopra_30", "sum"),
+        studenti_non_italiani_sopra_30=("_studenti_non_italiani_sopra_30", "sum"),
+        m_min_sopra_30=("_m_min_sopra_30", "sum"),
+        m_min_con_sostituzione_legacy_sopra_30=("_m_min_legacy_sopra_30", "sum"),
+        studenti_totali_analizzati=("alunni_totali", "sum"),
+        studenti_non_italiani_analizzati=("alunni_non_italiani", "sum"),
+        classi_esatte_sommate=("_classi_esatte", "sum"),
+        unita_con_chiave_classi_esatta=("chiave_classi_confrontabile", "sum"),
+    ).reset_index()
+
+    result = pd.DataFrame(
+        {
             "anno_scolastico": YEAR,
             "livello_aggregazione": level,
             "tipo_gestione": management_label,
@@ -461,58 +692,88 @@ def aggregate_rows(
             "comune": "",
             "codice_scuola": "",
             "denominazione_scuola": "",
-            "unita_totali": len(members),
-            "unita_sopra_30": len(flagged),
-            "unita_sopra_30_irrisolvibili": above_irrisolvibili,
-            "studenti_totali_sopra_30": above_n,
-            "studenti_non_italiani_sopra_30": above_f,
-            "m_min_sopra_30": above_m,
-            "m_min_pct_non_italiani_sopra_30": pct(above_m, above_f),
-            "m_min_pct_studenti_sopra_30": pct(above_m, above_n),
-            "m_min_con_sostituzione_legacy_sopra_30": above_m_legacy,
-            "studenti_totali_analizzati": all_n,
-            "studenti_non_italiani_analizzati": all_f,
-            "m_min_pct_non_italiani_analizzati": pct(above_m, all_f),
-            "m_min_pct_studenti_analizzati": pct(above_m, all_n),
-            "classi_esatte_sommate": classes_sum,
-            "unita_con_chiave_classi_esatta": exact_class_units,
-            "unita_senza_chiave_classi_esatta": missing_class_units,
-        }
-        for field in group_fields:
-            out[field] = labels[field]
-        output.append(out)
-    return output
+        },
+        index=grouped.index,
+    )
+    for field in group_fields:
+        result[field] = grouped[field]
+    for field in [
+        "unita_totali",
+        "unita_sopra_30",
+        "unita_sopra_30_irrisolvibili",
+        "studenti_totali_sopra_30",
+        "studenti_non_italiani_sopra_30",
+        "m_min_sopra_30",
+        "m_min_con_sostituzione_legacy_sopra_30",
+        "studenti_totali_analizzati",
+        "studenti_non_italiani_analizzati",
+        "classi_esatte_sommate",
+        "unita_con_chiave_classi_esatta",
+    ]:
+        result[field] = grouped[field].astype("int64")
+
+    above_m = result["m_min_sopra_30"]
+    result["m_min_pct_non_italiani_sopra_30"] = [
+        pct(int(m), int(f))
+        for m, f in zip(above_m, result["studenti_non_italiani_sopra_30"])
+    ]
+    result["m_min_pct_studenti_sopra_30"] = [
+        pct(int(m), int(n)) for m, n in zip(above_m, result["studenti_totali_sopra_30"])
+    ]
+    result["m_min_pct_non_italiani_analizzati"] = [
+        pct(int(m), int(f))
+        for m, f in zip(above_m, result["studenti_non_italiani_analizzati"])
+    ]
+    result["m_min_pct_studenti_analizzati"] = [
+        pct(int(m), int(n)) for m, n in zip(above_m, result["studenti_totali_analizzati"])
+    ]
+    result["unita_senza_chiave_classi_esatta"] = (
+        result["unita_totali"] - result["unita_con_chiave_classi_esatta"]
+    )
+    return result
 
 
-def build_aggregates(units: list[dict[str, object]]) -> list[dict[str, object]]:
-    definitions = [
-        ("plesso", ["codice_scuola", "denominazione_scuola", "codice_comune", "comune", "provincia", "regione"]),
+def build_aggregates(units: pd.DataFrame) -> pd.DataFrame:
+    levels = [
+        (
+            "plesso",
+            [
+                "codice_scuola",
+                "denominazione_scuola",
+                "codice_comune",
+                "comune",
+                "provincia",
+                "regione",
+            ],
+        ),
         ("comune", ["codice_comune", "comune", "provincia", "regione"]),
         ("provincia", ["provincia", "regione"]),
         ("regione", ["regione"]),
         ("nazionale", []),
     ]
-    output: list[dict[str, object]] = []
     managements = [
         ("tutte", units),
-        ("statale", [row for row in units if row["tipo_gestione"] == "statale"]),
-        ("paritaria", [row for row in units if row["tipo_gestione"] == "paritaria"]),
+        ("statale", units.loc[units["tipo_gestione"].eq("statale")]),
+        ("paritaria", units.loc[units["tipo_gestione"].eq("paritaria")]),
     ]
+
+    output: list[pd.DataFrame] = []
     for management_label, subset in managements:
-        for level, fields in definitions:
-            output.extend(aggregate_rows(subset, level, fields, management_label))
-    order = {"nazionale": 0, "regione": 1, "provincia": 2, "comune": 3, "plesso": 4}
-    output.sort(
-        key=lambda row: (
-            row["tipo_gestione"],
-            order[row["livello_aggregazione"]],
-            str(row.get("regione", "")),
-            str(row.get("provincia", "")),
-            str(row.get("comune", "")),
-            str(row.get("codice_scuola", "")),
+        for level, fields in levels:
+            output.append(aggregate_rows(subset, level, fields, management_label))
+
+    aggregates = pd.concat(output, ignore_index=True).loc[:, AGG_FIELDS]
+    level_order = {"nazionale": 0, "regione": 1, "provincia": 2, "comune": 3, "plesso": 4}
+    aggregates["_ordine_livello"] = aggregates["livello_aggregazione"].map(level_order)
+    return (
+        aggregates.sort_values(
+            ["tipo_gestione", "_ordine_livello", "regione", "provincia", "comune", "codice_scuola"],
+            kind="mergesort",
         )
+        .drop(columns="_ordine_livello")
+        .loc[:, AGG_FIELDS]
+        .reset_index(drop=True)
     )
-    return output
 
 
 def make_qc_row(metric: str, value: object, management: str, note: str = "") -> dict[str, object]:
@@ -525,81 +786,103 @@ def make_qc_row(metric: str, value: object, management: str, note: str = "") -> 
     }
 
 
-def build_qc(diagnostics: list[dict[str, object]], units: list[dict[str, object]]) -> list[dict[str, object]]:
+def build_qc(
+    diagnostics: list[dict[str, object]], units: pd.DataFrame
+) -> pd.DataFrame:
     qc: list[dict[str, object]] = []
     for diag in diagnostics:
-        mgmt = str(diag["management"])
+        management = str(diag["management"])
         qc.extend(
             [
-                make_qc_row("righe_studenti_cittadinanza", diag["citizenship_rows"], mgmt),
-                make_qc_row("studenti_totali_cittadinanza", diag["citizenship_n_total"], mgmt),
-                make_qc_row("studenti_non_italiani_cittadinanza", diag["citizenship_f_total"], mgmt),
-                make_qc_row("unità_sopra_30", diag["above_30_units"], mgmt),
-                make_qc_row("studenti_in_unità_sopra_30", diag["above_30_n_total"], mgmt),
-                make_qc_row("non_italiani_in_unità_sopra_30", diag["above_30_f_total"], mgmt),
+                make_qc_row("righe_studenti_cittadinanza", diag["citizenship_rows"], management),
+                make_qc_row("studenti_totali_cittadinanza", diag["citizenship_n_total"], management),
+                make_qc_row("studenti_non_italiani_cittadinanza", diag["citizenship_f_total"], management),
+                make_qc_row(
+                    "unità_escluse",
+                    diag["excluded_units"],
+                    management,
+                    f"Anagrafe mancante o caratteristica diversa da {CARATTERISTICA_AMMESSA} "
+                    f"(solo statali). Dettaglio in controlli_join_{YEAR}.csv e unita_escluse_{YEAR}.csv.",
+                ),
+                make_qc_row("studenti_esclusi", diag["excluded_n_total"], management),
+                make_qc_row("non_italiani_esclusi", diag["excluded_f_total"], management),
+                make_qc_row("unità_incluse", diag["included_units"], management),
+                make_qc_row(
+                    "studenti_inclusi",
+                    diag["included_n_total"],
+                    management,
+                    "N base dell'analisi; le metriche seguenti sono calcolate solo sulle unità incluse.",
+                ),
+                make_qc_row("non_italiani_inclusi", diag["included_f_total"], management),
+                make_qc_row("unità_sopra_30", diag["above_30_units"], management),
+                make_qc_row("studenti_in_unità_sopra_30", diag["above_30_n_total"], management),
+                make_qc_row("non_italiani_in_unità_sopra_30", diag["above_30_f_total"], management),
                 make_qc_row(
                     "m_min_in_unità_sopra_30",
                     diag["above_30_m_min_total"],
-                    mgmt,
+                    management,
                     "Formula senza sostituzione (N diminuisce); esclude le unità irrisolvibili.",
                 ),
                 make_qc_row(
                     "m_min_con_sostituzione_legacy_in_unità_sopra_30",
                     diag["above_30_m_min_con_sostituzione_total"],
-                    mgmt,
+                    management,
                     "Formula originaria del repository (N costante, sostituzione 1:1); sottostima il numero di spostamenti se gli studenti non vengono sostituiti.",
                 ),
                 make_qc_row(
                     "unità_sopra_30_irrisolvibili",
                     diag["above_30_irrisolvibili"],
-                    mgmt,
+                    management,
                     "Unità con zero alunni italiani (N=F): la sola rimozione di alunni non italiani non può mai portarle sotto il 30%.",
                 ),
-                make_qc_row("righe_dataset_classi_studenti", diag["class_rows"], mgmt),
-                make_qc_row("studenti_totali_classi_studenti", diag["classes_students_total"], mgmt),
-                make_qc_row("classi_totali", diag["classes_total"], mgmt),
-                make_qc_row("righe_classi_con_anno_7_pluriclasse", diag["class_course_7_rows"], mgmt),
-                make_qc_row("unità_con_chiave_classi_esatta", diag["class_exact_matches"], mgmt),
-                make_qc_row("unità_senza_chiave_classi_esatta", diag["class_missing_exact"], mgmt),
-                make_qc_row("unità_con_delta_N_nonzero", diag["class_delta_nonzero"], mgmt),
-                make_qc_row("somma_delta_N_cittadinanza_meno_classi", diag["class_delta_sum"], mgmt),
-                make_qc_row("unità_senza_anagrafica", diag["registry_missing_units"], mgmt),
-                make_qc_row("righe_anagrafe_standard", diag["registry_standard_rows"], mgmt),
-                make_qc_row("righe_anagrafe_autonome", diag["registry_autonomous_rows"], mgmt),
+                make_qc_row("righe_dataset_classi_studenti", diag["class_rows"], management),
+                make_qc_row("studenti_totali_classi_studenti", diag["classes_students_total"], management),
+                make_qc_row("classi_totali", diag["classes_total"], management),
+                make_qc_row("righe_classi_con_anno_7_pluriclasse", diag["class_course_7_rows"], management),
+                make_qc_row("chiavi_classi_duplicate_scartate", diag["class_duplicate_keys"], management),
+                make_qc_row("unità_con_chiave_classi_esatta", diag["class_exact_matches"], management),
+                make_qc_row("unità_senza_chiave_classi_esatta", diag["class_missing_exact"], management),
+                make_qc_row("unità_con_delta_N_nonzero", diag["class_delta_nonzero"], management),
+                make_qc_row("somma_delta_N_cittadinanza_meno_classi", diag["class_delta_sum"], management),
+                make_qc_row("unità_senza_anagrafica", diag["registry_missing_units"], management),
+                make_qc_row("righe_anagrafe_standard", diag["registry_standard_rows"], management),
+                make_qc_row("righe_anagrafe_autonome", diag["registry_autonomous_rows"], management),
+                make_qc_row("codici_anagrafe_duplicati_scartati", diag["registry_duplicate_codes"], management),
             ]
         )
 
-    combined_n_cit = sum(int(row["alunni_totali"]) for row in units)
-    combined_n_class = sum(
-        int(row["alunni_classi_esatte"])
-        for row in units
-        if row["alunni_classi_esatte"] != ""
+    qc.extend(
+        [
+            make_qc_row(
+                "studenti_totali_dataset_classi_tutte_le_righe",
+                sum(int(diag["classes_students_total"]) for diag in diagnostics),
+                "tutte",
+                "Confronto con il totale del flusso cittadinanza; include anche l'anno classe 7.",
+            ),
+            make_qc_row(
+                "studenti_totali_dataset_cittadinanza",
+                sum(int(diag["citizenship_n_total"]) for diag in diagnostics),
+                "tutte",
+                "Tutte le righe, prima del filtro sulla caratteristica.",
+            ),
+            make_qc_row(
+                "studenti_totali_inclusi",
+                int(units["alunni_totali"].sum()),
+                "tutte",
+                "N base dell'analisi.",
+            ),
+            make_qc_row(
+                "studenti_totali_classi_solo_chiavi_esatte",
+                numeric_sum(units["alunni_classi_esatte"]),
+                "tutte",
+                "Solo unità incluse; non è un confronto completo perché l'anno classe 7 non è joinabile al corso.",
+            ),
+        ]
     )
-    qc.append(
-        make_qc_row(
-            "studenti_totali_dataset_classi_tutte_le_righe",
-            sum(int(d["classes_students_total"]) for d in diagnostics),
-            "tutte",
-            "Confronto con il totale del flusso cittadinanza; include anche l'anno classe 7.",
-        )
+    return pd.DataFrame(
+        qc,
+        columns=["anno_scolastico", "metrica", "tipo_gestione", "valore", "nota"],
     )
-    qc.append(
-        make_qc_row(
-            "studenti_totali_dataset_cittadinanza",
-            combined_n_cit,
-            "tutte",
-            "N base dell'analisi.",
-        )
-    )
-    qc.append(
-        make_qc_row(
-            "studenti_totali_classi_solo_chiavi_esatte",
-            combined_n_class,
-            "tutte",
-            "Non è un confronto completo perché l'anno classe 7 non è joinabile al corso.",
-        )
-    )
-    return qc
 
 
 def sha256(path: Path) -> str:
@@ -611,9 +894,10 @@ def sha256(path: Path) -> str:
 
 
 def write_hashes() -> None:
-    rows = []
-    for path in sorted(RAW.glob("*.csv")):
-        rows.append({"file": path.name, "bytes": path.stat().st_size, "sha256": sha256(path)})
+    rows = [
+        {"file": path.name, "bytes": path.stat().st_size, "sha256": sha256(path)}
+        for path in sorted(RAW.glob("*.csv"))
+    ]
     write_csv(METADATA / "sha256_raw.csv", rows, ["file", "bytes", "sha256"])
 
 
@@ -622,31 +906,61 @@ def main() -> None:
     RESULTS.mkdir(parents=True, exist_ok=True)
     METADATA.mkdir(parents=True, exist_ok=True)
 
-    all_units: list[dict[str, object]] = []
-    diagnostics: list[dict[str, object]] = []
+    unit_frames = []
+    excluded_frames = []
+    diagnostics = []
+    join_rows = []
     for management in ("statale", "paritaria"):
-        units, diag = load_units(management)
-        all_units.extend(units)
-        diagnostics.append(diag)
+        units, excluded, diagnostic, join_qc = load_units(management)
+        unit_frames.append(units)
+        excluded_frames.append(excluded)
+        diagnostics.append(diagnostic)
+        join_rows.extend(join_qc)
 
-    all_units.sort(
-        key=lambda row: (
-            str(row["tipo_gestione"]),
-            str(row["regione"]),
-            str(row["provincia"]),
-            str(row["comune"]),
-            str(row["codice_scuola"]),
-            str(row["ordine_scuola"]),
-            int(row["anno_corso"]),
-        )
+    excluded_units = pd.concat(excluded_frames, ignore_index=True).sort_values(
+        ["tipo_gestione", "caratteristica_scuola", "codice_scuola", "ordine_scuola", "anno_corso"],
+        kind="mergesort",
     )
-    flagged = sorted(
-        [row for row in all_units if int(row["sopra_30"]) == 1],
-        key=lambda row: (
-            -float(row["quota_non_italiani"]),
-            -int(row["m_min"]) if row["m_min"] != "" else 1,
-            str(row["codice_scuola"]),
-        ),
+    write_csv(PROCESSED / f"unita_escluse_{YEAR}.csv", excluded_units, EXCLUDED_FIELDS)
+    write_csv(RESULTS / f"controlli_join_{YEAR}.csv", join_rows, JOIN_QC_FIELDS)
+
+    all_units = pd.concat(unit_frames, ignore_index=True)
+    all_units["_ordine_input"] = range(len(all_units))
+    all_units["_anno_corso_numero"] = pd.to_numeric(all_units["anno_corso"], errors="raise").astype(
+        "int64"
+    )
+    all_units = (
+        all_units.sort_values(
+            [
+                "tipo_gestione",
+                "regione",
+                "provincia",
+                "comune",
+                "codice_scuola",
+                "ordine_scuola",
+                "_anno_corso_numero",
+                "_ordine_input",
+            ],
+            kind="mergesort",
+        )
+        .drop(columns="_anno_corso_numero")
+        .reset_index(drop=True)
+    )
+    all_units["_ordine_ordinato"] = range(len(all_units))
+
+    flagged = all_units.loc[all_units["sopra_30"].eq(1)].copy()
+    flagged["_quota_sort"] = pd.to_numeric(flagged["quota_non_italiani"])
+    flagged["_m_min_sort"] = [
+        -int(value) if value != "" else 1 for value in flagged["m_min"]
+    ]
+    flagged = (
+        flagged.sort_values(
+            ["_quota_sort", "_m_min_sort", "codice_scuola", "_ordine_ordinato"],
+            ascending=[False, True, True, True],
+            kind="mergesort",
+        )
+        .drop(columns=["_quota_sort", "_m_min_sort"])
+        .reset_index(drop=True)
     )
 
     write_csv(PROCESSED / f"unita_{YEAR}.csv", all_units, UNIT_FIELDS)
@@ -654,18 +968,16 @@ def main() -> None:
 
     aggregates = build_aggregates(all_units)
     write_csv(RESULTS / f"aggregati_{YEAR}.csv", aggregates, AGG_FIELDS)
-    national = [
-        row
-        for row in aggregates
-        if row["livello_aggregazione"] == "nazionale" and row["tipo_gestione"] == "tutte"
+    national = aggregates.loc[
+        aggregates["livello_aggregazione"].eq("nazionale")
+        & aggregates["tipo_gestione"].eq("tutte")
     ]
     write_csv(RESULTS / f"aggregati_nazionale_{YEAR}.csv", national, AGG_FIELDS)
 
     qc = build_qc(diagnostics, all_units)
-    write_csv(RESULTS / f"controlli_qualita_{YEAR}.csv", qc, ["anno_scolastico", "metrica", "tipo_gestione", "valore", "nota"])
-
-    top = flagged[:100]
-    write_csv(RESULTS / f"top_100_unita_sopra_30_{YEAR}.csv", top, UNIT_FIELDS)
+    qc_fields = ["anno_scolastico", "metrica", "tipo_gestione", "valore", "nota"]
+    write_csv(RESULTS / f"controlli_qualita_{YEAR}.csv", qc, qc_fields)
+    write_csv(RESULTS / f"top_100_unita_sopra_30_{YEAR}.csv", flagged.head(100), UNIT_FIELDS)
 
     summary = {
         "generated_on": date.today().isoformat(),
@@ -674,19 +986,22 @@ def main() -> None:
         "formula": "M_min = ceil(max(0, 10F - 3N) / 7); spostamento SENZA sostituzione, N diminuisce di M_min",
         "formula_con_sostituzione_legacy": "M_min_legacy = max(0, ceil(F - 0.30*N)); assume sostituzione 1:1, N costante (formula originaria, sottostima gli spostamenti reali)",
         "unit_key": ["tipo_gestione", "CODICESCUOLA", "ORDINESCUOLA", "ANNOCORSO"],
+        "filter": f"statali: DESCRIZIONECARATTERISTICASCUOLA == '{CARATTERISTICA_AMMESSA}'; paritarie: nessun filtro (campo assente); escluse le unità senza anagrafe",
+        "units_excluded": len(excluded_units),
+        "students_excluded": int(excluded_units["alunni_totali"].sum()),
         "units": len(all_units),
         "units_above_30": len(flagged),
-        "units_above_30_irrisolvibili": sum(1 for row in flagged if row["m_min_irrisolvibile"] == 1),
-        "students": sum(int(row["alunni_totali"]) for row in all_units),
-        "non_italian_students": sum(int(row["alunni_non_italiani"]) for row in all_units),
-        "students_in_units_above_30": sum(int(row["alunni_totali"]) for row in flagged),
-        "non_italian_students_in_units_above_30": sum(int(row["alunni_non_italiani"]) for row in flagged),
-        "m_min_in_units_above_30": sum(int(row["m_min"]) for row in flagged if row["m_min"] != ""),
-        "m_min_con_sostituzione_legacy_in_units_above_30": sum(
-            int(row["m_min_con_sostituzione_legacy"]) for row in flagged
+        "units_above_30_irrisolvibili": int(flagged["m_min_irrisolvibile"].sum()),
+        "students": int(all_units["alunni_totali"].sum()),
+        "non_italian_students": int(all_units["alunni_non_italiani"].sum()),
+        "students_in_units_above_30": int(flagged["alunni_totali"].sum()),
+        "non_italian_students_in_units_above_30": int(flagged["alunni_non_italiani"].sum()),
+        "m_min_in_units_above_30": numeric_sum(flagged["m_min"]),
+        "m_min_con_sostituzione_legacy_in_units_above_30": int(
+            flagged["m_min_con_sostituzione_legacy"].sum()
         ),
-        "anagrafe_missing_units": sum(1 for row in all_units if row["anagrafe_mappata"] == "0"),
-        "class_exact_key_missing_units": sum(1 for row in all_units if row["chiave_classi_confrontabile"] == 0),
+        "anagrafe_missing_units": int(all_units["anagrafe_mappata"].eq("0").sum()),
+        "class_exact_key_missing_units": int(all_units["chiave_classi_confrontabile"].eq(0).sum()),
         "managements": ["statale", "paritaria"],
     }
     (RESULTS / f"summary_{YEAR}.json").write_text(

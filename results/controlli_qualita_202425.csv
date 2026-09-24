@@ -1,0 +1,61 @@
+anno_scolastico,metrica,tipo_gestione,valore,nota
+202425,righe_studenti_cittadinanza,statale,119793,
+202425,studenti_totali_cittadinanza,statale,6172717,
+202425,studenti_non_italiani_cittadinanza,statale,742904,
+202425,unità_escluse,statale,6128,Anagrafe mancante o caratteristica diversa da NORMALE (solo statali). Dettaglio in controlli_join_202425.csv e unita_escluse_202425.csv.
+202425,studenti_esclusi,statale,191819,
+202425,non_italiani_esclusi,statale,23402,
+202425,unità_incluse,statale,113665,
+202425,studenti_inclusi,statale,5980898,N base dell'analisi; le metriche seguenti sono calcolate solo sulle unità incluse.
+202425,non_italiani_inclusi,statale,719502,
+202425,unità_sopra_30,statale,12213,
+202425,studenti_in_unità_sopra_30,statale,512694,
+202425,non_italiani_in_unità_sopra_30,statale,217794,
+202425,m_min_in_unità_sopra_30,statale,96288,Formula senza sostituzione (N diminuisce); esclude le unità irrisolvibili.
+202425,m_min_con_sostituzione_legacy_in_unità_sopra_30,statale,69830,"Formula originaria del repository (N costante, sostituzione 1:1); sottostima il numero di spostamenti se gli studenti non vengono sostituiti."
+202425,unità_sopra_30_irrisolvibili,statale,147,Unità con zero alunni italiani (N=F): la sola rimozione di alunni non italiani non può mai portarle sotto il 30%.
+202425,righe_dataset_classi_studenti,statale,116317,
+202425,studenti_totali_classi_studenti,statale,6172717,
+202425,classi_totali,statale,325878,
+202425,righe_classi_con_anno_7_pluriclasse,statale,1392,
+202425,chiavi_classi_duplicate_scartate,statale,0,
+202425,unità_con_chiave_classi_esatta,statale,109020,
+202425,unità_senza_chiave_classi_esatta,statale,4645,
+202425,unità_con_delta_N_nonzero,statale,21,
+202425,somma_delta_N_cittadinanza_meno_classi,statale,178,
+202425,unità_senza_anagrafica,statale,0,
+202425,righe_anagrafe_standard,statale,50515,
+202425,righe_anagrafe_autonome,statale,1189,
+202425,codici_anagrafe_duplicati_scartati,statale,0,
+202425,righe_studenti_cittadinanza,paritaria,14991,
+202425,studenti_totali_cittadinanza,paritaria,342921,
+202425,studenti_non_italiani_cittadinanza,paritaria,19146,
+202425,unità_escluse,paritaria,0,Anagrafe mancante o caratteristica diversa da NORMALE (solo statali). Dettaglio in controlli_join_202425.csv e unita_escluse_202425.csv.
+202425,studenti_esclusi,paritaria,0,
+202425,non_italiani_esclusi,paritaria,0,
+202425,unità_incluse,paritaria,14991,
+202425,studenti_inclusi,paritaria,342921,N base dell'analisi; le metriche seguenti sono calcolate solo sulle unità incluse.
+202425,non_italiani_inclusi,paritaria,19146,
+202425,unità_sopra_30,paritaria,579,
+202425,studenti_in_unità_sopra_30,paritaria,7679,
+202425,non_italiani_in_unità_sopra_30,paritaria,3535,
+202425,m_min_in_unità_sopra_30,paritaria,1818,Formula senza sostituzione (N diminuisce); esclude le unità irrisolvibili.
+202425,m_min_con_sostituzione_legacy_in_unità_sopra_30,paritaria,1531,"Formula originaria del repository (N costante, sostituzione 1:1); sottostima il numero di spostamenti se gli studenti non vengono sostituiti."
+202425,unità_sopra_30_irrisolvibili,paritaria,38,Unità con zero alunni italiani (N=F): la sola rimozione di alunni non italiani non può mai portarle sotto il 30%.
+202425,righe_dataset_classi_studenti,paritaria,14966,
+202425,studenti_totali_classi_studenti,paritaria,342921,
+202425,classi_totali,paritaria,20183,
+202425,righe_classi_con_anno_7_pluriclasse,paritaria,17,
+202425,chiavi_classi_duplicate_scartate,paritaria,0,
+202425,unità_con_chiave_classi_esatta,paritaria,14949,
+202425,unità_senza_chiave_classi_esatta,paritaria,42,
+202425,unità_con_delta_N_nonzero,paritaria,0,
+202425,somma_delta_N_cittadinanza_meno_classi,paritaria,0,
+202425,unità_senza_anagrafica,paritaria,0,
+202425,righe_anagrafe_standard,paritaria,11497,
+202425,righe_anagrafe_autonome,paritaria,68,
+202425,codici_anagrafe_duplicati_scartati,paritaria,0,
+202425,studenti_totali_dataset_classi_tutte_le_righe,tutte,6515638,Confronto con il totale del flusso cittadinanza; include anche l'anno classe 7.
+202425,studenti_totali_dataset_cittadinanza,tutte,6515638,"Tutte le righe, prima del filtro sulla caratteristica."
+202425,studenti_totali_inclusi,tutte,6323819,N base dell'analisi.
+202425,studenti_totali_classi_solo_chiavi_esatte,tutte,6297168,Solo unità incluse; non è un confronto completo perché l'anno classe 7 non è joinabile al corso.

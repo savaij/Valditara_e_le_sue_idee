@@ -172,15 +172,17 @@ Dalla radice del progetto:
 
 ```bash
 bash src/download_data.sh    # opzionale: riscarica i CSV MIM
-bash src/run_analysis.sh     # M_min per unità + aggregazioni (stdlib Python 3.10+)
+bash src/run_analysis.sh     # M_min per unità + aggregazioni (richiede pandas)
 bash src/run_simulation.sh   # simulazione realistica: scenario 20% (default) + 100% (seed 42)
 bash src/run_simulation.sh --montecarlo 500   # 500 seed per quota, due JSON complessivi
 ```
 
-`run_analysis.sh` usa la sola libreria standard di Python 3.10+. `run_simulation.sh` richiede in aggiunta **numpy** (usato solo da `simulate_realloc.py`, per RNG riproducibile e calcolo vettoriale delle distanze):
+`run_analysis.sh` richiede **pandas** per leggere, unire e aggregare i dataset.
+La simulazione usa inoltre **numpy** per il generatore casuale riproducibile e
+il calcolo vettoriale delle distanze. Per installare entrambe le dipendenze:
 
 ```bash
-pip install numpy
+pip install pandas numpy
 ```
 
 Per rieseguire la simulazione con parametri diversi (quota di campionamento, seed, percentile di capienza, tetto di distanza):

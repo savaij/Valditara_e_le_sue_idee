@@ -144,7 +144,7 @@ RING_MARGIN = 2  # anelli extra esplorati dopo il primo che trova candidati,
 
 # Limite esplicito di alunni per classe. Se None, la simulazione usa la stima
 # empirica al percentile configurato da --capienza-percentile.
-MAX_LIMIT_PER_CLASS: int | None = None
+MAX_LIMIT_PER_CLASS: int | None = 30
 
 # Mapping da valore anagrafico (DESCRIZIONETIPOLOGIAGRADOISTRUZIONESCUOLA,
 # campo "tipo_scuola_anagrafe" in unita_202425.csv) a "cluster" di
@@ -889,6 +889,9 @@ def run_simulation(
             "E' uno scenario controfattuale (proxy della quota senza adeguata conoscenza "
             "dell'italiano), non una misura osservata."
         ),
+        # Totali sulle unità in simulazione (escluse quelle senza coordinate).
+        "alunni_italiani_totale": sum(u.alunni_italiani for u in units),
+        "alunni_non_italiani_totale": sum(u.alunni_non_italiani for u in units),
         "unita_sopra_30_totali": len(all_above),
         "unita_sopra_30_irrisolvibili_escluse": len(irrisolvibili),
         "unita_destinazione_candidate": len(destinations_all),
