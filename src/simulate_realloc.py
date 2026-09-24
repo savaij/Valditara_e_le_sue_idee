@@ -26,17 +26,32 @@ considerata equivalente se e solo se:
 - stesso `anno_corso` (stesso anno di corso, non genericamente lo stesso
   ordine): per continuità didattica un alunno di classe 3 non può essere
   inserito in una classe 4.
+- stesso "cluster" di tipologia/indirizzo scolastico (es. liceo scientifico,
+  istituto tecnico commerciale, alberghiero...), derivato dalla colonna
+  anagrafica `DESCRIZIONETIPOLOGIAGRADOISTRUZIONESCUOLA` (campo
+  `tipo_scuola_anagrafe` in `unita_202425.csv`) tramite la tabella
+  `SCHOOL_TYPE_CLUSTERS` sotto. Se il valore anagrafico di una delle due unità
+  (origine o destinazione) ricade in una categoria troppo generica per essere
+  informativa (istituti comprensivi, convitti, o un valore non mappato) il
+  vincolo di tipologia non si applica per quell'unità: resta solo il vincolo
+  di `ordine_scuola`. Disattivabile con `--consenti-cambio-tipologia-scuola`
+  come verifica di sensitività, non di default.
 - codice_scuola diverso dall'origine (per costruzione le unità sopra soglia
   non possono comparire anche come destinazione, perché la destinazione deve
   avere p <= 0.30; vedi sotto).
 
 LIMITE IMPORTANTE: il flusso MIM usato (ALUCORSOINDCLA / ALUITASTRACIT) non
 contiene l'indirizzo di studio (es. liceo scientifico vs istituto tecnico
-economico) per la secondaria di II grado. La definizione di "equivalente" per
-la secondaria di II grado è quindi più larga di quella reale: nella
-simulazione un alunno di un liceo può in teoria essere abbinato a un istituto
-professionale dello stesso anno di corso. Questo è dichiarato esplicitamente
-come limite dei dati disponibili, non un'omissione di modellazione.
+economico) per la secondaria di II grado. Questo limite è ora in parte
+mitigato dal vincolo di tipologia sopra, che usa il valore anagrafico
+(`DESCRIZIONETIPOLOGIAGRADOISTRUZIONESCUOLA`), disponibile per il 100% delle
+unità nei dati attuali. Resta però un limite residuo noto: per le scuole
+paritarie il valore anagrafico della secondaria II grado è spesso generico
+("SCUOLA SEC. SECONDO GRADO NON STATALE", senza indirizzo specificato) e
+quindi non vincolante — in quel caso, come per ogni valore non mappato, un
+alunno di un liceo può in teoria essere abbinato a un istituto professionale
+dello stesso anno di corso. Questo è dichiarato esplicitamente come limite
+dei dati disponibili, non un'omissione di modellazione.
 
 ## Capacità delle sedi riceventi
 
@@ -85,11 +100,13 @@ Per ciascun gruppo (tipo_gestione, ordine_scuola, anno_corso):
    alcuna componente binomiale) può cambiare quali unità ottengono i posti
    più vicini quando più origini competono per le stesse destinazioni;
 2. per ciascuna unità di origine, si cercano le destinazioni con posti
-   disponibili più vicine (ricerca a griglia con anelli crescenti, poi
-   distanza geodetica esatta - formula haversine, coordinate dal file di
-   geocoding), assegnando gli studenti alle destinazioni più vicine finché la
-   domanda campionata è soddisfatta o la capacità del gruppo è esaurita
-   (in tal caso il residuo è "non riallocabile");
+   disponibili più vicine (ricerca a griglia con anelli crescenti, filtrando
+   per compatibilità del cluster di tipologia scolastica oltre che per
+   capacità residua, poi distanza geodetica esatta - formula haversine,
+   coordinate dal file di geocoding), assegnando gli studenti alle
+   destinazioni più vicine finché la domanda campionata è soddisfatta o la
+   capacità del gruppo è esaurita (in tal caso il residuo è "non
+   riallocabile");
 3. le capacità delle destinazioni si aggiornano man mano: due unità di
    origine vicine competono per gli stessi posti, chi viene processato prima
    (per severità) ha priorità.
@@ -125,6 +142,120 @@ GRID_CELL_DEG = 0.25
 RING_MARGIN = 2  # anelli extra esplorati dopo il primo che trova candidati,
                  # per attenuare l'effetto bordo-cella della griglia.
 
+# Limite esplicito di alunni per classe. Se None, la simulazione usa la stima
+# empirica al percentile configurato da --capienza-percentile.
+MAX_LIMIT_PER_CLASS: int | None = None
+
+# Mapping da valore anagrafico (DESCRIZIONETIPOLOGIAGRADOISTRUZIONESCUOLA,
+# campo "tipo_scuola_anagrafe" in unita_202425.csv) a "cluster" di
+# tipologia/indirizzo scolastico. Le categorie in IGNORED_SCHOOL_CLUSTERS sono
+# definite troppo genericamente (organizzative, non un indirizzo specifico):
+# le unità con quel valore, o con un valore anagrafico non presente qui
+# affatto (es. le varianti "NON STATALE" delle paritarie, che non indicano
+# l'indirizzo), non hanno un cluster e quindi nessun vincolo di tipologia,
+# vedi TIPO_SCUOLA_TO_CLUSTER e cluster_compatible().
+SCHOOL_TYPE_CLUSTERS: dict[str, list[str]] = {
+    "primaria": [
+        "SCUOLA PRIMARIA",
+    ],
+    "secondaria_primo_grado": [
+        "SCUOLA PRIMO GRADO",
+    ],
+    "infanzia": [
+        "SCUOLA INFANZIA",
+    ],
+    "commerciale_turistico_professionale": [
+        "IST PROF PER I SERVIZI COMMERCIALI",
+        "IST PROF PER I SERVIZI COMMERCIALI E TURISTICI",
+        "IST PROF PER I SERVIZI TURISTICI",
+        "IST PROF PER I SERVIZI COMM TUR E DELLA PUBB",
+    ],
+    "alberghiero_ristorazione": [
+        "IST PROF PER I SERVIZI ALBERGHIERI E RISTORAZIONE",
+        "IST PROF ALBERGHIERO",
+    ],
+    "agricoltura": [
+        "IST PROF PER L'AGRICOLTURA E L'AMBIENTE",
+        "IST PROF PER L'AGRICOLTURA",
+        "ISTITUTO TECNICO AGRARIO",
+    ],
+    "industria_artigianato": [
+        "IST PROF INDUSTRIA E ARTIGIANATO",
+        "IST PROF INDUSTRIA E ARTIGIANATO PER CIECHI",
+        "IST PROF INDUSTRIA E ARTIGIANATO PER SORDOMUTI",
+    ],
+    "commerciale_economico_tecnico": [
+        "ISTITUTO TECNICO COMMERCIALE",
+        "IST TEC COMMERCIALE E PER GEOMETRI",
+        "IST TECNICO ECONOMICO E TECNOLOGICO",
+    ],
+    "geometri": [
+        "ISTITUTO TECNICO PER GEOMETRI",
+    ],
+    "turismo_tecnico": [
+        "ISTITUTO TECNICO PER IL TURISMO",
+    ],
+    "sociale": [
+        "IST PROF PER I SERVIZI SOCIALI",
+        "ISTITUTO TECNICO PER ATTIVITA' SOCIALI (GIA' ITF)",
+    ],
+    "artistico": [
+        "LICEO ARTISTICO",
+        "ISTITUTO D'ARTE",
+    ],
+    "magistrale": [
+        "ISTITUTO MAGISTRALE",
+        "SCUOLA MAGISTRALE",
+    ],
+    "nautico_marinare": [
+        "ISTITUTO TECNICO NAUTICO",
+        "IST PROF INDUSTRIA E ATTIVITA' MARINARE",
+    ],
+    "aeronautico": [
+        "ISTITUTO TECNICO AERONAUTICO",
+    ],
+    "cinema_televisione_pubblicita": [
+        "IST PROF CINEMATOGRAFIA E TELEVISIONE",
+        "IST PROF PER I SERVIZI PUBBLICITARI",
+    ],
+    "industriale_tecnico": [
+        "ISTITUTO TECNICO INDUSTRIALE",
+    ],
+    "liceo_classico": [
+        "LICEO CLASSICO",
+    ],
+    "liceo_scientifico": [
+        "LICEO SCIENTIFICO",
+    ],
+    # Tipologie organizzative, non identificano uno specifico insegnamento.
+    "istituzioni_miste_o_generiche": [
+        "ISTITUTO COMPRENSIVO",
+        "ISTITUTO SUPERIORE",
+        "CENTRO TERRITORIALE",
+    ],
+    "convitti_educandati": [
+        "CONVITTO ANNESSO",
+        "CONVITTO NAZIONALE",
+        "EDUCANDATO",
+    ],
+}
+
+IGNORED_SCHOOL_CLUSTERS = {"istituzioni_miste_o_generiche", "convitti_educandati"}
+
+TIPO_SCUOLA_TO_CLUSTER: dict[str, str] = {
+    raw_value: cluster_name
+    for cluster_name, raw_values in SCHOOL_TYPE_CLUSTERS.items()
+    if cluster_name not in IGNORED_SCHOOL_CLUSTERS
+    for raw_value in raw_values
+}
+
+
+def cluster_compatible(src_cluster: str | None, dst_cluster: str | None) -> bool:
+    """Nessun vincolo se uno dei due lati non ha un cluster di tipologia noto."""
+
+    return src_cluster is None or dst_cluster is None or src_cluster == dst_cluster
+
+
 DETAIL_FIELDS = [
     "anno_scolastico",
     "quota_campione",
@@ -137,11 +268,15 @@ DETAIL_FIELDS = [
     "comune_origine",
     "provincia_origine",
     "regione_origine",
+    "tipo_scuola_anagrafe_origine",
+    "tipo_scuola_cluster_origine",
     "codice_scuola_destinazione",
     "denominazione_destinazione",
     "comune_destinazione",
     "provincia_destinazione",
     "regione_destinazione",
+    "tipo_scuola_anagrafe_destinazione",
+    "tipo_scuola_cluster_destinazione",
     "n_studenti_spostati",
     "distanza_km",
 ]
@@ -158,6 +293,8 @@ UNALLOCATED_FIELDS = [
     "comune_origine",
     "provincia_origine",
     "regione_origine",
+    "tipo_scuola_anagrafe_origine",
+    "tipo_scuola_cluster_origine",
     "n_studenti_non_riallocati",
     "motivo",
 ]
@@ -166,6 +303,7 @@ CAPACITY_FIELDS = [
     "tipo_gestione",
     "ordine_scuola",
     "percentile_usato",
+    "max_limit_per_class",
     "n_osservazioni",
     "capienza_classe_stimata",
 ]
@@ -207,6 +345,8 @@ class Unit:
         "comune",
         "provincia",
         "regione",
+        "tipo_scuola_anagrafe",
+        "cluster",
         "alunni_italiani",
         "alunni_non_italiani",
         "alunni_totali",
@@ -228,6 +368,8 @@ class Unit:
         self.comune = row["comune"]
         self.provincia = row["provincia"]
         self.regione = row["regione"]
+        self.tipo_scuola_anagrafe = row.get("tipo_scuola_anagrafe", "")
+        self.cluster = TIPO_SCUOLA_TO_CLUSTER.get(self.tipo_scuola_anagrafe)
         self.alunni_italiani = int(row["alunni_italiani"])
         self.alunni_non_italiani = int(row["alunni_non_italiani"])
         self.alunni_totali = int(row["alunni_totali"])
@@ -261,8 +403,17 @@ def load_units_with_coords() -> list[Unit]:
     return units, missing
 
 
-def compute_capacity_table(units: list[Unit], percentile: float) -> dict[tuple[str, str], float]:
-    """Capienza massima per classe stimata (percentile empirico) per (gestione, ordine)."""
+def compute_capacity_table(
+    units: list[Unit], percentile: float, *, write_output: bool = True
+) -> dict[tuple[str, str], float]:
+    """Capienza per classe fissa o stimata empiricamente per (gestione, ordine)."""
+
+    if MAX_LIMIT_PER_CLASS is not None and (
+        not isinstance(MAX_LIMIT_PER_CLASS, int)
+        or isinstance(MAX_LIMIT_PER_CLASS, bool)
+        or MAX_LIMIT_PER_CLASS <= 0
+    ):
+        raise ValueError("MAX_LIMIT_PER_CLASS deve essere un intero positivo oppure None")
 
     values: dict[tuple[str, str], list[float]] = defaultdict(list)
     for unit in units:
@@ -273,19 +424,24 @@ def compute_capacity_table(units: list[Unit], percentile: float) -> dict[tuple[s
     table: dict[tuple[str, str], float] = {}
     rows_for_csv: list[dict[str, object]] = []
     for key, vals in sorted(values.items()):
-        arr = np.array(vals, dtype=float)
-        cap = float(np.percentile(arr, percentile))
+        if MAX_LIMIT_PER_CLASS is None:
+            arr = np.array(vals, dtype=float)
+            cap = float(np.percentile(arr, percentile))
+        else:
+            cap = float(MAX_LIMIT_PER_CLASS)
         table[key] = cap
         rows_for_csv.append(
             {
                 "tipo_gestione": key[0],
                 "ordine_scuola": key[1],
-                "percentile_usato": percentile,
+                "percentile_usato": percentile if MAX_LIMIT_PER_CLASS is None else "",
+                "max_limit_per_class": MAX_LIMIT_PER_CLASS if MAX_LIMIT_PER_CLASS is not None else "",
                 "n_osservazioni": len(vals),
                 "capienza_classe_stimata": round(cap, 3),
             }
         )
-    write_csv(PROCESSED / f"capienza_classe_stimata_{YEAR}.csv", rows_for_csv, CAPACITY_FIELDS)
+    if write_output:
+        write_csv(PROCESSED / f"capienza_classe_stimata_{YEAR}.csv", rows_for_csv, CAPACITY_FIELDS)
     return table
 
 
@@ -345,7 +501,7 @@ def search_and_assign(
     while ring <= max_ring:
         for cell in ring_cells(cx, cy, ring):
             for idx in grid.get(cell, ()):
-                if capacity[idx] > 0:
+                if capacity[idx] > 0 and cluster_compatible(source.cluster, destinations[idx].cluster):
                     candidate_idx.append(idx)
         if candidate_idx and found_first_at is None:
             found_first_at = ring
@@ -389,6 +545,10 @@ def parse_args() -> argparse.Namespace:
                          help="Percentile empirico usato come capienza massima per classe (default 95).")
     parser.add_argument("--consenti-cambio-gestione", action="store_true",
                          help="Permette destinazioni con tipo_gestione diverso dall'origine (default: no).")
+    parser.add_argument("--consenti-cambio-tipologia-scuola", action="store_true",
+                         help="Disattiva il vincolo di cluster di tipologia/indirizzo scolastico "
+                              "(derivato da DESCRIZIONETIPOLOGIAGRADOISTRUZIONESCUOLA); solo ordine_scuola "
+                              "resta vincolante (default: no).")
     parser.add_argument("--ordine-origine-casuale", action="store_true",
                          help="Processa le unità di origine di ciascun gruppo in un ordine casuale "
                               "(permutazione via seed) invece dell'euristica per severità decrescente. "
@@ -400,17 +560,25 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def main() -> None:
-    args = parse_args()
+def run_simulation(
+    args: argparse.Namespace,
+    *,
+    write_outputs: bool = True,
+    print_summary: bool = True,
+    detail_rows_out: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
     if not (0.0 <= args.quota_campione <= 1.0):
         raise SystemExit("--quota-campione deve essere tra 0 e 1")
 
     units, missing_coords = load_units_with_coords()
-    if missing_coords:
+    if missing_coords and print_summary:
         print(f"ATTENZIONE: {missing_coords} unità senza coordinate geocodificate, escluse.")
     units = [u for u in units if not math.isnan(u.lat) and not math.isnan(u.lon)]
+    if args.consenti_cambio_tipologia_scuola:
+        for u in units:
+            u.cluster = None
 
-    capacity_table = compute_capacity_table(units, args.capienza_percentile)
+    capacity_table = compute_capacity_table(units, args.capienza_percentile, write_output=write_outputs)
 
     # --- unità di origine ---
     all_above = [u for u in units if u.sopra_30]
@@ -480,6 +648,8 @@ def main() -> None:
                             "comune_origine": u.comune,
                             "provincia_origine": u.provincia,
                             "regione_origine": u.regione,
+                            "tipo_scuola_anagrafe_origine": u.tipo_scuola_anagrafe,
+                            "tipo_scuola_cluster_origine": u.cluster or "",
                             "n_studenti_non_riallocati": needed,
                             "motivo": "nessuna_unita_ricevente_equivalente_nel_gruppo",
                         }
@@ -490,6 +660,8 @@ def main() -> None:
         nrows_span = max(d.lat for d in group_dests) - min(d.lat for d in group_dests)
         ncols_span = max(d.lon for d in group_dests) - min(d.lon for d in group_dests)
         max_ring = int(max(nrows_span, ncols_span) / GRID_CELL_DEG) + 4
+        dest_clusters_in_group = {d.cluster for d in group_dests}
+        group_has_wildcard_dest = None in dest_clusters_in_group
 
         if args.ordine_origine_casuale:
             perm = rng.permutation(len(group_sources))
@@ -527,11 +699,15 @@ def main() -> None:
                         "comune_origine": u.comune,
                         "provincia_origine": u.provincia,
                         "regione_origine": u.regione,
+                        "tipo_scuola_anagrafe_origine": u.tipo_scuola_anagrafe,
+                        "tipo_scuola_cluster_origine": u.cluster or "",
                         "codice_scuola_destinazione": dest.codice_scuola,
                         "denominazione_destinazione": dest.denominazione_scuola,
                         "comune_destinazione": dest.comune,
                         "provincia_destinazione": dest.provincia,
                         "regione_destinazione": dest.regione,
+                        "tipo_scuola_anagrafe_destinazione": dest.tipo_scuola_anagrafe,
+                        "tipo_scuola_cluster_destinazione": dest.cluster or "",
                         "n_studenti_spostati": take,
                         "distanza_km": round(dist, 3),
                     }
@@ -542,6 +718,12 @@ def main() -> None:
                 distances_by_region[u.regione].extend([dist] * take)
             if leftover > 0:
                 total_unallocated += leftover
+                if u.cluster is not None and not group_has_wildcard_dest and u.cluster not in dest_clusters_in_group:
+                    motivo = "nessuna_destinazione_tipologia_compatibile_nel_gruppo"
+                elif args.max_km is None:
+                    motivo = "capacita_esaurita_nel_gruppo_nazionale"
+                else:
+                    motivo = "capacita_esaurita_o_oltre_max_km"
                 unallocated_rows.append(
                     {
                         "anno_scolastico": YEAR,
@@ -555,18 +737,23 @@ def main() -> None:
                         "comune_origine": u.comune,
                         "provincia_origine": u.provincia,
                         "regione_origine": u.regione,
+                        "tipo_scuola_anagrafe_origine": u.tipo_scuola_anagrafe,
+                        "tipo_scuola_cluster_origine": u.cluster or "",
                         "n_studenti_non_riallocati": leftover,
-                        "motivo": "capacita_esaurita_nel_gruppo_nazionale"
-                        if args.max_km is None
-                        else "capacita_esaurita_o_oltre_max_km",
+                        "motivo": motivo,
                     }
                 )
 
     suffix = f"q{int(round(args.quota_campione * 100)):03d}_seed{args.seed}"
     if args.ordine_origine_casuale:
         suffix += "_ordcas"
-    write_csv(RESULTS / f"simulazione_spostamenti_dettaglio_{YEAR}_{suffix}.csv", detail_rows, DETAIL_FIELDS)
-    write_csv(RESULTS / f"simulazione_non_riallocabili_{YEAR}_{suffix}.csv", unallocated_rows, UNALLOCATED_FIELDS)
+    if write_outputs:
+        write_csv(
+            RESULTS / f"simulazione_spostamenti_dettaglio_{YEAR}_{suffix}.csv", detail_rows, DETAIL_FIELDS
+        )
+        write_csv(
+            RESULTS / f"simulazione_non_riallocabili_{YEAR}_{suffix}.csv", unallocated_rows, UNALLOCATED_FIELDS
+        )
 
     # --- controlli di qualità ---
     qc_rows: list[dict[str, object]] = []
@@ -602,6 +789,14 @@ def main() -> None:
         if 10 * new_f > 3 * new_n:
             violazioni_soglia += 1
 
+    violazioni_tipologia_scuola = sum(
+        1
+        for row in detail_rows
+        if not cluster_compatible(
+            row["tipo_scuola_cluster_origine"] or None, row["tipo_scuola_cluster_destinazione"] or None
+        )
+    )
+
     balance_errors = 0
     assigned_by_source: dict[str, int] = defaultdict(int)
     for row in detail_rows:
@@ -633,14 +828,19 @@ def main() -> None:
        "Deve essere 0: nessuna destinazione può superare 0.30 dopo l'inserimento.")
     qc("violazioni_capacita_in_destinazioni", violazioni_capacita,
        "Deve essere 0: nessuna destinazione può ricevere più della propria capacità stimata.")
+    qc("violazioni_tipologia_scuola_in_destinazioni", violazioni_tipologia_scuola,
+       "Deve essere 0: nessun abbinamento può avere cluster di tipologia scolastica incompatibili.")
     qc("unita_origine_con_bilancio_incoerente", balance_errors,
        "Deve essere 0: assegnati + non_riallocati deve sempre coincidere col campione.")
-    qc("capienza_percentile_usato", args.capienza_percentile)
+    qc("capienza_percentile_usato", args.capienza_percentile if MAX_LIMIT_PER_CLASS is None else "nessuno")
+    qc("max_limit_per_class_usato", MAX_LIMIT_PER_CLASS if MAX_LIMIT_PER_CLASS is not None else "nessuno")
     qc("cambio_gestione_consentito", int(args.consenti_cambio_gestione))
+    qc("cluster_tipologia_scuola_applicato", int(not args.consenti_cambio_tipologia_scuola))
     qc("ordine_origine_casuale", int(args.ordine_origine_casuale))
     qc("max_km_applicato", args.max_km if args.max_km is not None else "nessuno")
 
-    write_csv(RESULTS / f"controlli_qualita_simulazione_{YEAR}_{suffix}.csv", qc_rows, QC_FIELDS)
+    if write_outputs:
+        write_csv(RESULTS / f"controlli_qualita_simulazione_{YEAR}_{suffix}.csv", qc_rows, QC_FIELDS)
 
     # --- distribuzione delle distanze (bin per istogramma) ---
     dist_rows: list[dict[str, object]] = []
@@ -651,11 +851,12 @@ def main() -> None:
             count = int(np.sum((arr >= lo) & (arr < hi)))
             label = f"[{lo},{hi})" if hi != float("inf") else f"[{lo},+inf)"
             dist_rows.append({"bin_km": label, "n_studenti": count})
-    write_csv(
-        RESULTS / f"simulazione_distribuzione_distanze_{YEAR}_{suffix}.csv",
-        dist_rows,
-        ["bin_km", "n_studenti"],
-    )
+    if write_outputs:
+        write_csv(
+            RESULTS / f"simulazione_distribuzione_distanze_{YEAR}_{suffix}.csv",
+            dist_rows,
+            ["bin_km", "n_studenti"],
+        )
 
     def dist_stats(values: list[float]) -> dict[str, float | int]:
         if not values:
@@ -676,8 +877,10 @@ def main() -> None:
         "school_year": YEAR_LABEL,
         "quota_campione": args.quota_campione,
         "seed": args.seed,
-        "capienza_percentile": args.capienza_percentile,
+        "capienza_percentile": args.capienza_percentile if MAX_LIMIT_PER_CLASS is None else None,
+        "max_limit_per_class": MAX_LIMIT_PER_CLASS,
         "consenti_cambio_gestione": args.consenti_cambio_gestione,
+        "consenti_cambio_tipologia_scuola": args.consenti_cambio_tipologia_scuola,
         "ordine_origine_casuale": args.ordine_origine_casuale,
         "max_km_applicato": args.max_km,
         "nota_campionamento": (
@@ -697,11 +900,22 @@ def main() -> None:
         "distanza_km": dist_stats(all_distances),
         "distanza_km_per_ordine_scuola": {k: dist_stats(v) for k, v in sorted(distances_by_order.items())},
         "distanza_km_per_regione": {k: dist_stats(v) for k, v in sorted(distances_by_region.items())},
+        "controlli_qualita": {str(row["metrica"]): row["valore"] for row in qc_rows},
     }
-    (RESULTS / f"simulazione_riepilogo_{YEAR}_{suffix}.json").write_text(
-        json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-    )
-    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    if write_outputs:
+        RESULTS.mkdir(parents=True, exist_ok=True)
+        (RESULTS / f"simulazione_riepilogo_{YEAR}_{suffix}.json").write_text(
+            json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+    if print_summary:
+        print(json.dumps(summary, ensure_ascii=False, indent=2))
+    if detail_rows_out is not None:
+        detail_rows_out.extend(detail_rows)
+    return summary
+
+
+def main() -> None:
+    run_simulation(parse_args())
 
 
 if __name__ == "__main__":

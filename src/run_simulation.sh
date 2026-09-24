@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Esegue analyze.py (se non già fatto) e poi la simulazione realistica degli
-# spostamenti in due scenari:
+# Esegue la simulazione realistica degli spostamenti in due scenari. Richiede
+# che analyze.py abbia già prodotto data_processed/unita_202425.csv:
 #   - default: quota_campione=0.20 (proxy controfattuale)
 #   - completo: quota_campione=1.00 (tutto il pool m_min), come limite
 #     superiore di confronto con lo scenario di default.
@@ -14,7 +14,8 @@ set -euo pipefail
 #
 #   2) Monte Carlo: N run indipendenti con seed diversi per ciascuno scenario,
 #      seguite dal calcolo di media/deviazione standard delle metriche
-#      principali (aggregate_montecarlo.py). Ogni run usa anche
+#      principali. Produce un unico JSON di dettaglio con le metriche di ogni
+#      run e un unico JSON riepilogativo per entrambe le quote. Ogni run usa anche
 #      --ordine-origine-casuale: a parità di quota_campione (anche 1.00) il
 #      flusso di riallocazione dipende dall'ordine con cui le unità di
 #      origine competono per le stesse destinazioni, quindi è quella la
@@ -29,15 +30,8 @@ project_root="$(cd "$(dirname "$0")/.." && pwd)"
 if [[ "${1:-}" == "--montecarlo" ]]; then
     n_seeds="${2:?specificare il numero di seed, es: --montecarlo 50}"
     seed_base="${3:-0}"
-    for quota in 0.20 1.00; do
-        for ((i = 0; i < n_seeds; i++)); do
-            seed=$((seed_base + i))
-            python3 "$project_root/src/simulate_realloc.py" \
-                --quota-campione "$quota" --seed "$seed" --ordine-origine-casuale
-        done
-        python3 "$project_root/src/aggregate_montecarlo.py" \
-            --quota-campione "$quota" --n-seeds "$n_seeds" --seed-base "$seed_base" --ordine-origine-casuale
-    done
+    python3 "$project_root/src/aggregate_montecarlo.py" \
+        --n-seeds "$n_seeds" --seed-base "$seed_base" --ordine-origine-casuale
 else
     seed="${1:-42}"
     python3 "$project_root/src/simulate_realloc.py" --quota-campione 0.20 --seed "$seed"

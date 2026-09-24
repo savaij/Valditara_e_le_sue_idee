@@ -72,6 +72,8 @@ Non esiste nei dati un campo di capienza massima per plesso/classe. Si stima una
 
 La capienza stimata di un'unità è `classi_esatte × capienza_classe_stimata`; i posti fisici disponibili sono `max(0, capienza stimata − alunni_totali)`. Le unità senza `classi_esatte` (~3,6% del totale, vedi "Copertura e limiti") sono escluse dal pool di destinazioni: non è possibile stimarne la capacità, quindi per prudenza non vengono usate come riceventi (possono comunque restare unità di origine).
 
+In `src/simulate_realloc.py`, `MAX_LIMIT_PER_CLASS` può essere impostata a un intero positivo: in quel caso sostituisce il percentile empirico come capienza massima per classe. Con il valore predefinito `None` resta attiva la stima al percentile configurato da `--capienza-percentile`.
+
 Una destinazione può inoltre ricevere al più `floor((3N − 10F) / 7)` alunni non italiani aggiuntivi senza superare essa stessa la soglia del 30% (stessa aritmetica esatta usata per `M_min`); il tetto finale di posti ricevibili è il minimo tra capienza fisica e questo vincolo di soglia.
 
 ### Campionamento controfattuale (`--quota-campione`, default 0,20)
@@ -112,7 +114,7 @@ Con le ipotesi di capacità adottate (percentile 95° empirico), il pool naziona
 
 ### Controlli di qualità della simulazione
 
-`results/controlli_qualita_simulazione_202425_q*.csv` verifica, per ogni run: che nessuna destinazione superi la soglia del 30% dopo l'inserimento, che nessuna destinazione riceva più della propria capacità stimata, e che per ogni unità di origine `assegnati + non_riallocati = campionati`. In entrambi gli scenari eseguiti tutte e tre le verifiche danno **zero violazioni**.
+Nelle simulazioni singole, `results/controlli_qualita_simulazione_202425_q*.csv` verifica per ogni run soglia del 30%, capacità, compatibilità di tipologia e bilancio degli studenti. Nel Monte Carlo gli stessi controlli sono inclusi nelle metriche per run e aggregati nel riepilogo.
 
 ## File principali
 
@@ -127,15 +129,13 @@ Con le ipotesi di capacità adottate (percentile 95° empirico), il pool naziona
 - `results/top_100_unita_sopra_30_202425.csv`: prime 100 unità ordinate per quota e `M_min`.
 - `results/summary_202425.json`: riepilogo machine-readable del calcolo `M_min`.
 - `results/mappa_scuole_202425.html`: mappa interattiva dei plessi con `m_min_sopra_30 > 0` (generata da `src/plot_schools.py`).
-- `results/simulazione_spostamenti_dettaglio_202425_q{Q}_seed{S}.csv`: una riga per coppia origine→destinazione con numero di studenti spostati e distanza in km.
-- `results/simulazione_non_riallocabili_202425_q{Q}_seed{S}.csv`: studenti campionati che la simulazione non è riuscita a ricollocare, con motivo.
-- `results/simulazione_riepilogo_202425_q{Q}_seed{S}.json`: riepilogo machine-readable della simulazione (per ordine di scuola e regione inclusi).
-- `results/simulazione_distribuzione_distanze_202425_q{Q}_seed{S}.csv`: istogramma delle distanze percorse, per bin.
-- `results/controlli_qualita_simulazione_202425_q{Q}_seed{S}.csv`: controlli di qualità della simulazione.
+- Con una singola simulazione (`src/simulate_realloc.py` o `bash src/run_simulation.sh`), i file `simulazione_spostamenti_dettaglio`, `simulazione_non_riallocabili`, `simulazione_riepilogo`, `simulazione_distribuzione_distanze` e `controlli_qualita_simulazione` vengono salvati in `results/` con suffisso `202425_q{Q}_seed{S}`. Il dettaglio CSV contiene le coppie origine→destinazione; il riepilogo JSON include metriche per ordine di scuola e regione.
+- Con `bash src/run_simulation.sh --montecarlo N [SEED_BASE]`, il runner salva solo due file complessivi in `results/`: `simulazione_montecarlo_dettaglio_202425_nN_seedBASE-ULTIMO_ordcas.json` contiene le metriche di ogni run per entrambe le quote (20% e 100%); `simulazione_montecarlo_202425_nN_seedBASE-ULTIMO_ordcas.json` contiene media, deviazione standard, minimo e massimo per le metriche aggregate in ciascuno scenario.
+- Per ispezionare gli spostamenti estremi del Monte Carlo, `python3 src/inspect_montecarlo_outliers.py` rilegge il JSON di dettaglio predefinito, riesegue i 10 run con massimo più alto sopra 500 km e salva le coppie origine→destinazione in un CSV con coordinate. Usare `--soglia-km 100` per abbassare la soglia, `--top-runs 0` per rieseguire tutti i run sopra soglia, oppure passare un altro JSON e/o `--output percorso.csv`.
 - `metadata/fonti.csv`: URL di download, anno scolastico e data di riferimento dei file.
 - `metadata/sha256_raw.csv`: hash SHA-256 dei file grezzi presenti al momento dell'elaborazione.
 
-`Q` e `S` nei nomi file codificano rispettivamente `quota_campione` (in percento, es. `q020` = 0,20) e `seed`.
+Nei nomi dei file della simulazione singola, `Q` e `S` codificano rispettivamente `quota_campione` (in percento, es. `q020` = 0,20) e `seed`.
 
 ## Fonti e scelta dell'anno
 
@@ -174,6 +174,7 @@ Dalla radice del progetto:
 bash src/download_data.sh    # opzionale: riscarica i CSV MIM
 bash src/run_analysis.sh     # M_min per unità + aggregazioni (stdlib Python 3.10+)
 bash src/run_simulation.sh   # simulazione realistica: scenario 20% (default) + 100% (seed 42)
+bash src/run_simulation.sh --montecarlo 500   # 500 seed per quota, due JSON complessivi
 ```
 
 `run_analysis.sh` usa la sola libreria standard di Python 3.10+. `run_simulation.sh` richiede in aggiunta **numpy** (usato solo da `simulate_realloc.py`, per RNG riproducibile e calcolo vettoriale delle distanze):
@@ -192,4 +193,4 @@ python3 src/simulate_realloc.py --quota-campione 0.20 --capienza-percentile 75  
 python3 src/simulate_realloc.py --quota-campione 1.00 --max-km 30        # tetto di distanza realistico
 ```
 
-La data di generazione del run consegnato è 22 settembre 2026.
+La simulazione usa `MAX_LIMIT_PER_CLASS = None` in `src/simulate_realloc.py` per mantenere la stima empirica predefinita. La data di generazione del run consegnato è 22 settembre 2026.
