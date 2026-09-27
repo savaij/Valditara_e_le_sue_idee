@@ -1,0 +1,246 @@
+{
+  "generated_on": "2026-09-27",
+  "school_year": "2024/25",
+  "quota_campione": 0.346,
+  "seed": 42,
+  "capienza_percentile": null,
+  "max_limit_per_class": 30,
+  "consenti_cambio_gestione": false,
+  "consenti_cambio_tipologia_scuola": true,
+  "ordine_origine_casuale": false,
+  "max_km_applicato": 5.0,
+  "nota_campionamento": "quota_campione applica un campionamento Binomiale(m_min, quota_campione) riproducibile via seed sul pool m_min di analyze.py (formula senza sostituzione). E' uno scenario controfattuale (proxy della quota senza adeguata conoscenza dell'italiano), non una misura osservata.",
+  "alunni_italiani_totale": 1275967,
+  "alunni_non_italiani_totale": 191202,
+  "unita_sopra_30_totali": 2844,
+  "classi_sopra_30_totali": 7370,
+  "unita_sopra_30_irrisolvibili_escluse": 8,
+  "unita_destinazione_candidate": 22064,
+  "studenti_m_min_pool_totale": 25927,
+  "studenti_campionati_totale": 8962,
+  "studenti_riallocati_totale": 7757,
+  "studenti_non_riallocati_totale": 1205,
+  "quota_riallocati_su_campionati": 0.8655,
+  "distanza_km": {
+    "n": 7757,
+    "media_km": 1.767,
+    "mediana_km": 1.49,
+    "p90_km": 3.576,
+    "p95_km": 4.342,
+    "max_km": 5.0,
+    "min_km": 0.0
+  },
+  "distanza_km_per_ordine_scuola": {
+    "SCUOLA PRIMARIA": {
+      "n": 4114,
+      "media_km": 1.719,
+      "mediana_km": 1.352,
+      "p90_km": 3.511,
+      "p95_km": 4.19,
+      "max_km": 5.0,
+      "min_km": 0.0
+    },
+    "SCUOLA SECONDARIA I GRADO": {
+      "n": 2718,
+      "media_km": 2.241,
+      "mediana_km": 2.115,
+      "p90_km": 3.982,
+      "p95_km": 4.599,
+      "max_km": 4.999,
+      "min_km": 0.0
+    },
+    "SCUOLA SECONDARIA II GRADO": {
+      "n": 925,
+      "media_km": 0.589,
+      "mediana_km": 0.32,
+      "p90_km": 1.379,
+      "p95_km": 1.925,
+      "max_km": 4.82,
+      "min_km": 0.0
+    }
+  },
+  "distanza_km_per_regione": {
+    "ABRUZZO": {
+      "n": 41,
+      "media_km": 2.241,
+      "mediana_km": 2.007,
+      "p90_km": 4.61,
+      "p95_km": 4.988,
+      "max_km": 4.988,
+      "min_km": 0.0
+    },
+    "BASILICATA": {
+      "n": 9,
+      "media_km": 1.011,
+      "mediana_km": 1.067,
+      "p90_km": 1.067,
+      "p95_km": 1.067,
+      "max_km": 1.067,
+      "min_km": 0.569
+    },
+    "CALABRIA": {
+      "n": 12,
+      "media_km": 1.246,
+      "mediana_km": 0.904,
+      "p90_km": 2.785,
+      "p95_km": 3.171,
+      "max_km": 3.561,
+      "min_km": 0.228
+    },
+    "CAMPANIA": {
+      "n": 70,
+      "media_km": 1.152,
+      "mediana_km": 0.469,
+      "p90_km": 3.163,
+      "p95_km": 3.844,
+      "max_km": 4.844,
+      "min_km": 0.0
+    },
+    "EMILIA ROMAGNA": {
+      "n": 976,
+      "media_km": 1.774,
+      "mediana_km": 1.388,
+      "p90_km": 3.981,
+      "p95_km": 4.468,
+      "max_km": 4.998,
+      "min_km": 0.0
+    },
+    "FRIULI-VENEZIA G.": {
+      "n": 203,
+      "media_km": 1.691,
+      "mediana_km": 1.196,
+      "p90_km": 3.525,
+      "p95_km": 4.214,
+      "max_km": 4.865,
+      "min_km": 0.0
+    },
+    "LAZIO": {
+      "n": 457,
+      "media_km": 1.201,
+      "mediana_km": 0.947,
+      "p90_km": 2.278,
+      "p95_km": 3.197,
+      "max_km": 4.68,
+      "min_km": 0.0
+    },
+    "LIGURIA": {
+      "n": 415,
+      "media_km": 1.742,
+      "mediana_km": 1.409,
+      "p90_km": 3.394,
+      "p95_km": 3.977,
+      "max_km": 4.853,
+      "min_km": 0.0
+    },
+    "LOMBARDIA": {
+      "n": 2730,
+      "media_km": 1.788,
+      "mediana_km": 1.62,
+      "p90_km": 3.412,
+      "p95_km": 4.073,
+      "max_km": 4.999,
+      "min_km": 0.0
+    },
+    "MARCHE": {
+      "n": 162,
+      "media_km": 1.604,
+      "mediana_km": 1.419,
+      "p90_km": 3.576,
+      "p95_km": 4.416,
+      "max_km": 4.477,
+      "min_km": 0.0
+    },
+    "MOLISE": {
+      "n": 5,
+      "media_km": 0.112,
+      "mediana_km": 0.0,
+      "p90_km": 0.336,
+      "p95_km": 0.447,
+      "max_km": 0.559,
+      "min_km": 0.0
+    },
+    "PIEMONTE": {
+      "n": 857,
+      "media_km": 2.046,
+      "mediana_km": 1.988,
+      "p90_km": 3.685,
+      "p95_km": 4.399,
+      "max_km": 4.982,
+      "min_km": 0.0
+    },
+    "PUGLIA": {
+      "n": 34,
+      "media_km": 0.942,
+      "mediana_km": 0.515,
+      "p90_km": 2.141,
+      "p95_km": 4.225,
+      "max_km": 4.706,
+      "min_km": 0.0
+    },
+    "SARDEGNA": {
+      "n": 6,
+      "media_km": 0.333,
+      "mediana_km": 0.314,
+      "p90_km": 0.546,
+      "p95_km": 0.546,
+      "max_km": 0.546,
+      "min_km": 0.14
+    },
+    "SICILIA": {
+      "n": 141,
+      "media_km": 0.603,
+      "mediana_km": 0.501,
+      "p90_km": 1.104,
+      "p95_km": 1.787,
+      "max_km": 5.0,
+      "min_km": 0.0
+    },
+    "TOSCANA": {
+      "n": 679,
+      "media_km": 1.713,
+      "mediana_km": 1.172,
+      "p90_km": 4.167,
+      "p95_km": 4.829,
+      "max_km": 4.996,
+      "min_km": 0.0
+    },
+    "UMBRIA": {
+      "n": 92,
+      "media_km": 0.991,
+      "mediana_km": 0.775,
+      "p90_km": 2.015,
+      "p95_km": 3.328,
+      "max_km": 4.934,
+      "min_km": 0.0
+    },
+    "VENETO": {
+      "n": 868,
+      "media_km": 2.186,
+      "mediana_km": 2.13,
+      "p90_km": 3.967,
+      "p95_km": 4.459,
+      "max_km": 4.983,
+      "min_km": 0.0
+    }
+  },
+  "controlli_qualita": {
+    "unita_sopra_30_totali": 2844,
+    "classi_sopra_30_totali": 7370,
+    "unita_sopra_30_irrisolvibili_escluse": 8,
+    "unita_destinazione_candidate": 22064,
+    "unita_destinazione_escluse_senza_classi_esatte": 0,
+    "studenti_campionati_totale": 8962,
+    "studenti_riallocati_totale": 7757,
+    "studenti_non_riallocati_totale": 1205,
+    "violazioni_soglia_30_in_destinazioni": 0,
+    "violazioni_capacita_in_destinazioni": 0,
+    "violazioni_tipologia_scuola_in_destinazioni": 0,
+    "unita_origine_con_bilancio_incoerente": 0,
+    "capienza_percentile_usato": "nessuno",
+    "max_limit_per_class_usato": 30,
+    "cambio_gestione_consentito": 0,
+    "cluster_tipologia_scuola_applicato": 0,
+    "ordine_origine_casuale": 0,
+    "max_km_applicato": 5.0
+  }
+}

@@ -60,10 +60,9 @@ classe empirica come percentile (default: 95°) della distribuzione nazionale
 di alunni/classi osservata per ciascuna coppia (tipo_gestione, ordine_scuola),
 tra le unità con chiave classi/studenti confrontabile. La capienza stimata di
 un'unità è `classi_esatte * capienza_classe_stimata`; i posti fisici
-disponibili sono `max(0, capienza stimata - alunni_totali)`. Le unità senza
-`classi_esatte` (~3.6% del totale) sono escluse dal pool di destinazioni:
-non è possibile stimarne la capacità, quindi per prudenza non vengono usate
-come riceventi (possono comunque essere unità di origine).
+disponibili sono `max(0, capienza stimata - alunni_totali)`. Se
+`classi_esatte` è vuoto, per la simulazione viene imputato il valore 1. Le
+unità con meno di `MINIMO_ALUNNI` alunni totali sono escluse dall'analisi.
 
 Una destinazione può inoltre ricevere al più
 `floor((3*N - 10*F) / 7)` alunni non italiani aggiuntivi senza superare essa
@@ -145,6 +144,9 @@ RING_MARGIN = 2  # anelli extra esplorati dopo il primo che trova candidati,
 # Limite esplicito di alunni per classe. Se None, la simulazione usa la stima
 # empirica al percentile configurato da --capienza-percentile.
 MAX_LIMIT_PER_CLASS: int | None = 30
+
+# Numero minimo di alunni totali perché un'unità partecipi alla simulazione.
+MINIMO_ALUNNI = 10
 
 # Mapping da valore anagrafico (DESCRIZIONETIPOLOGIAGRADOISTRUZIONESCUOLA,
 # campo "tipo_scuola_anagrafe" in unita_202425.csv) a "cluster" di
@@ -376,15 +378,19 @@ class Unit:
         self.sopra_30 = row["sopra_30"] == "1"
         self.m_min = int(row["m_min"]) if row["m_min"] != "" else None
         self.irrisolvibile = row["m_min_irrisolvibile"] == "1"
-        classi = row.get("classi_esatte", "")
-        self.classi_esatte = int(classi) if classi not in ("", None) else None
+        classi = (row.get("classi_esatte") or "").strip()
+        self.classi_esatte = int(classi) if classi else 1
         self.lat = math.nan
         self.lon = math.nan
 
 
 def load_units_with_coords() -> list[Unit]:
     rows = read_csv(UNITS_PATH)
-    units = [Unit(row) for row in rows]
+    units = [
+        Unit(row)
+        for row in rows
+        if row["anno_corso"] == "1" and int(row["alunni_totali"]) >= MINIMO_ALUNNI
+    ]
     geo_rows = read_csv(GEOCODING_PATH)
     coords: dict[str, tuple[float, float]] = {}
     for row in geo_rows:
@@ -817,6 +823,8 @@ def run_simulation(
             balance_errors += 1
 
     qc("unita_sopra_30_totali", len(all_above))
+    qc("classi_sopra_30_totali", sum(u.classi_esatte for u in all_above),
+       "Somma di classi_esatte delle unità sopra soglia, non conteggio di unità.")
     qc("unita_sopra_30_irrisolvibili_escluse", len(irrisolvibili),
        "Zero alunni italiani: escluse dalla simulazione, vedi analyze.py")
     qc("unita_destinazione_candidate", len(destinations_all))
@@ -893,6 +901,7 @@ def run_simulation(
         "alunni_italiani_totale": sum(u.alunni_italiani for u in units),
         "alunni_non_italiani_totale": sum(u.alunni_non_italiani for u in units),
         "unita_sopra_30_totali": len(all_above),
+        "classi_sopra_30_totali": sum(u.classi_esatte for u in all_above),
         "unita_sopra_30_irrisolvibili_escluse": len(irrisolvibili),
         "unita_destinazione_candidate": len(destinations_all),
         "studenti_m_min_pool_totale": sum(u.m_min for u in sources_all),

@@ -963,6 +963,9 @@ def main() -> None:
         .reset_index(drop=True)
     )
 
+    #SOLO CON UNITA >= 10 STUDENTI
+    all_units = all_units[all_units['alunni_totali']>=10]
+
     write_csv(PROCESSED / f"unita_{YEAR}.csv", all_units, UNIT_FIELDS)
     write_csv(PROCESSED / f"unita_sopra_30_{YEAR}.csv", flagged, UNIT_FIELDS)
 

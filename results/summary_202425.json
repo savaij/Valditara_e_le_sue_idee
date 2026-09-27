@@ -1,5 +1,5 @@
 {
-  "generated_on": "2026-09-24",
+  "generated_on": "2026-09-27",
   "school_year": "2024/25",
   "threshold": 0.3,
   "formula": "M_min = ceil(max(0, 10F - 3N) / 7); spostamento SENZA sostituzione, N diminuisce di M_min",
@@ -13,17 +13,17 @@
   "filter": "statali: DESCRIZIONECARATTERISTICASCUOLA == 'NORMALE'; paritarie: nessun filtro (campo assente); escluse le unità senza anagrafe",
   "units_excluded": 6128,
   "students_excluded": 191819,
-  "units": 128656,
+  "units": 115454,
   "units_above_30": 12792,
   "units_above_30_irrisolvibili": 185,
-  "students": 6323819,
-  "non_italian_students": 738648,
+  "students": 6250109,
+  "non_italian_students": 731135,
   "students_in_units_above_30": 520373,
   "non_italian_students_in_units_above_30": 221329,
   "m_min_in_units_above_30": 98106,
   "m_min_con_sostituzione_legacy_in_units_above_30": 71361,
   "anagrafe_missing_units": 0,
-  "class_exact_key_missing_units": 4687,
+  "class_exact_key_missing_units": 499,
   "managements": [
     "statale",
     "paritaria"

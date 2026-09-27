@@ -57,5 +57,5 @@ anno_scolastico,metrica,tipo_gestione,valore,nota
 202425,codici_anagrafe_duplicati_scartati,paritaria,0,
 202425,studenti_totali_dataset_classi_tutte_le_righe,tutte,6515638,Confronto con il totale del flusso cittadinanza; include anche l'anno classe 7.
 202425,studenti_totali_dataset_cittadinanza,tutte,6515638,"Tutte le righe, prima del filtro sulla caratteristica."
-202425,studenti_totali_inclusi,tutte,6323819,N base dell'analisi.
-202425,studenti_totali_classi_solo_chiavi_esatte,tutte,6297168,Solo unità incluse; non è un confronto completo perché l'anno classe 7 non è joinabile al corso.
+202425,studenti_totali_inclusi,tutte,6250109,N base dell'analisi.
+202425,studenti_totali_classi_solo_chiavi_esatte,tutte,6244299,Solo unità incluse; non è un confronto completo perché l'anno classe 7 non è joinabile al corso.
