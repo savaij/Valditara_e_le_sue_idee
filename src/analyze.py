@@ -81,6 +81,7 @@ AGG_FIELDS = [
     "unita_totali",
     "unita_sopra_30",
     "unita_sopra_30_irrisolvibili",
+    "classi_sopra_trenta",
     "studenti_totali_sopra_30",
     "studenti_non_italiani_sopra_30",
     "m_min_sopra_30",
@@ -656,6 +657,9 @@ def aggregate_rows(
     flagged = work["sopra_30"]
     work["_unita"] = 1
     work["_irrisolvibili_sopra_30"] = work["m_min_irrisolvibile"] * flagged
+    # Le scuole senza classi_esatte valgono una classe sola.
+    work["_classi_per_unita"] = pd.to_numeric(work["classi_esatte"], errors="coerce").fillna(1)
+    work["_classi_sopra_30"] = work["_classi_per_unita"] * flagged
     work["_studenti_totali_sopra_30"] = work["alunni_totali"] * flagged
     work["_studenti_non_italiani_sopra_30"] = work["alunni_non_italiani"] * flagged
     work["_m_min_sopra_30"] = pd.to_numeric(work["m_min"], errors="coerce").fillna(0) * flagged
@@ -671,6 +675,7 @@ def aggregate_rows(
         unita_totali=("_unita", "sum"),
         unita_sopra_30=("sopra_30", "sum"),
         unita_sopra_30_irrisolvibili=("_irrisolvibili_sopra_30", "sum"),
+        classi_sopra_trenta=("_classi_sopra_30", "sum"),
         studenti_totali_sopra_30=("_studenti_totali_sopra_30", "sum"),
         studenti_non_italiani_sopra_30=("_studenti_non_italiani_sopra_30", "sum"),
         m_min_sopra_30=("_m_min_sopra_30", "sum"),
@@ -701,6 +706,7 @@ def aggregate_rows(
         "unita_totali",
         "unita_sopra_30",
         "unita_sopra_30_irrisolvibili",
+        "classi_sopra_trenta",
         "studenti_totali_sopra_30",
         "studenti_non_italiani_sopra_30",
         "m_min_sopra_30",
