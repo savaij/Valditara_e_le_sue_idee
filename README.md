@@ -1,5 +1,22 @@
 # Simulazione controfattuale del criterio del 30% — MIM a.s. 2024/25
 
+## Correzione del calcolo dei posti disponibili nei comuni — 27 settembre 2026
+
+Il calcolo di `src/check_change_comune.py` è stato corretto: i posti ricevibili
+sono il **minimo** tra posti fisici e limite del 30%, con arrotondamento per
+difetto. Con gli stessi dati, filtri e raggruppamenti del calcolo precedente,
+i comuni con deficit interno passano da **2 a 808 su 5.270** e il deficit
+complessivo da **2 a 12.485 studenti**. Si tratta di uno scenario sulle prime
+del 2024/25 basato sulla cittadinanza, non di una stima degli obblighi reali
+previsti dal decreto.
+
+La [nota metodologica](docs/correzione_disponibilita_comuni_202425.md) spiega
+la formula, il confronto, i presupposti, i limiti e come riprodurre il calcolo.
+L'[elenco per comune](results/comuni_cambio_comune_202425_riepilogo_comuni.csv)
+e il [confronto per gruppo scolastico](results/comuni_cambio_comune_202425_confronto.csv)
+riportano il dettaglio. Le sezioni successive descrivono revisioni precedenti;
+i loro numeri e parametri non descrivono necessariamente questo nuovo scenario.
+
 Questo progetto calcola, come esercizio controfattuale, quante unità didattiche superano la soglia stretta del 30% di alunni con cittadinanza non italiana, quale sarebbe il minimo numero di riallocazioni necessario per riportarle alla soglia (senza applicare il criterio della conoscenza dell'italiano, che non è misurabile con questi dati), e — a partire da questa revisione — simula concretamente dove questi studenti potrebbero essere ricollocati e quanto lontano dovrebbero spostarsi.
 
 ## Aggiornamento di questa revisione

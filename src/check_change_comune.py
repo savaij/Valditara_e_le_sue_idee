@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Conta i comuni in cui almeno uno studente deve cambiare comune per essere riallocato.
+"""Conta i comuni con un deficit di posti per la riallocazione nello scenario modellato.
 
 Per ogni comune (anno_corso == 1) e per ogni combinazione (ordine_scuola,
 tipo_scuola_anagrafe) si confronta il numero minimo di studenti da spostare
 (`m_min`) con la disponibilità effettiva delle unità dello stesso comune, cioè
-i posti liberi (capienza - alunni) al netto degli stranieri che l'unità può
+il minimo tra i posti fisici liberi e gli alunni non italiani che l'unità può
 ancora accogliere restando sotto il 30%. Se gli studenti da spostare superano
-la disponibilità, almeno uno studente deve uscire dal comune.
+la disponibilità, il gruppo ha un deficit di posti interni al comune,
+date le ipotesi del modello. Non si verifica la disponibilità fuori comune.
 
 Con `--consenti-cambio-tipo-scuola` il vincolo su `tipo_scuola_anagrafe` viene
 ignorato: il confronto si fa solo per (comune, ordine_scuola).
@@ -35,13 +36,17 @@ def carica_unita() -> pd.DataFrame:
     df = df[df["m_min_irrisolvibile"] == 0].copy()
     df["rimanenza"] = (df["capienza"] - df["alunni_totali"]).clip(lower=0)
 
-    # numero teorico di stranieri che l'unità può ancora accogliere senza superare il 30%
+    # Massimo intero x tale che (F + x) / (N + x) <= 3/10.
+    # Il floor è necessario: arrotondare al più vicino può superare la soglia.
     df["disponibilita_stranieri"] = (
-        (SOGLIA * df["alunni_totali"] - df["alunni_non_italiani"]) / (1 - SOGLIA)
-    ).round()
+        (3 * df["alunni_totali"] - 10 * df["alunni_non_italiani"]) // 7
+    )
 
-    # numero effettivo (rimanenza - numero teorico di stranieri, cappato inferiormente a 0)
-    df["disponibilita_effettiva"] = (df["rimanenza"] - df["disponibilita_stranieri"]).clip(lower=0)
+    # I due vincoli valgono contemporaneamente. Le unità già sopra soglia
+    # hanno headroom negativo e quindi disponibilità ricevibile pari a zero.
+    df["disponibilita_effettiva"] = df[
+        ["rimanenza", "disponibilita_stranieri"]
+    ].min(axis=1).clip(lower=0)
     return df[df["anno_corso"] == 1]
 
 
@@ -76,9 +81,9 @@ def main() -> None:
 
     n_comuni = voci["codice_comune"].nunique()
     n_comuni_totali = df["codice_comune"].nunique()
-    print(f"Comuni con almeno uno studente costretto a cambiare comune: "
+    print(f"Comuni con deficit di posti interni nello scenario modellato: "
           f"{n_comuni} su {n_comuni_totali} ({n_comuni / n_comuni_totali:.1%})")
-    print(f"Studenti senza posto nel proprio comune: {int(voci['studenti_senza_posto'].sum())}")
+    print(f"Deficit di posti nel proprio comune: {int(voci['studenti_senza_posto'].sum())}")
 
     suffisso = "_cambio_tipo" if args.consenti_cambio_tipo_scuola else ""
     out = RESULTS / f"comuni_cambio_comune_202425{suffisso}.csv"
