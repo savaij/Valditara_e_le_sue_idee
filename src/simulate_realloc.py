@@ -65,23 +65,20 @@ disponibili sono `max(0, capienza stimata - alunni_totali)`. Se
 unità con meno di `MINIMO_ALUNNI` alunni totali sono escluse dall'analisi.
 
 Una destinazione può inoltre ricevere al più
-`floor((3*N - 10*F) / 7)` alunni non italiani aggiuntivi senza superare essa
+`floor((3*N - 10*F) / 7)` alunni non nati in Italia aggiuntivi (F = suoi
+`alunni_non_nati_in_Italia`) senza superare essa
 stessa la soglia del 30% (stessa aritmetica esatta di `analyze.py`); il tetto
 finale è il minimo tra capienza fisica e questo vincolo di soglia.
 
-## Campionamento controfattuale (quota_campione)
+## Alunni da riallocare
 
-Il criterio del 30% MIM riguarda la cittadinanza, non la competenza
-linguistica. Poiché i dati non contengono alcuna misura di competenza in
-italiano, `--quota-campione` (default 0.20) applica la simulazione di
-spostamento realistico SOLO a un sottoinsieme casuale (Binomiale, seed fisso)
-degli studenti individuati da `m_min` per ciascuna unità sopra soglia, come
-PROXY PURAMENTE CONTROFATTUALE della quota che potrebbe non avere una
-conoscenza adeguata dell'italiano. Non è una stima empirica: è un parametro
-di scenario, chiaramente distinto dai dati osservati (colonna
-`quota_campione` e `seed` in ogni output). Con `--quota-campione 1.0` si
-ottiene lo scenario "pieno" (tutti gli `m_min`), utile come limite superiore
-di confronto.
+La stima di chi non conosce l'italiano è fatta a monte, in `analyze.py`:
+`alunni_non_nati_in_Italia` (quota regionale per ordine di scuola di alunni
+stranieri non nati in Italia, riferimento MIM 2022/23) sostituisce la
+cittadinanza nel calcolo di `sopra_30` e `m_min`; gli stranieri nati in Italia
+contano come italiani. Questo script ricolloca quindi esattamente `m_min`
+alunni per ciascuna unità sopra soglia, senza alcun campionamento. Il seed
+serve solo per `--ordine-origine-casuale`.
 
 ## Algoritmo di assegnazione
 
@@ -95,15 +92,14 @@ Per ciascun gruppo (tipo_gestione, ordine_scuola, anno_corso):
    `--ordine-origine-casuale` l'ordine è invece una permutazione casuale
    (via seed) ricalcolata per ciascun gruppo: utile per una simulazione
    Monte Carlo sulla sensibilità del flusso di riallocazione all'ordine di
-   elaborazione, che a parità di `quota_campione` (anche 1.00, cioè senza
-   alcuna componente binomiale) può cambiare quali unità ottengono i posti
-   più vicini quando più origini competono per le stesse destinazioni;
+   elaborazione, che può cambiare quali unità ottengono i posti più vicini
+   quando più origini competono per le stesse destinazioni;
 2. per ciascuna unità di origine, si cercano le destinazioni con posti
    disponibili più vicine (ricerca a griglia con anelli crescenti, filtrando
    per compatibilità del cluster di tipologia scolastica oltre che per
    capacità residua, poi distanza geodetica esatta - formula haversine,
    coordinate dal file di geocoding), assegnando gli studenti alle
-   destinazioni più vicine finché la domanda campionata è soddisfatta o la
+   destinazioni più vicine finché `m_min` è soddisfatto o la
    capacità del gruppo è esaurita (in tal caso il residuo è "non
    riallocabile");
 3. le capacità delle destinazioni si aggiornano man mano: due unità di
@@ -260,7 +256,6 @@ def cluster_compatible(src_cluster: str | None, dst_cluster: str | None) -> bool
 
 DETAIL_FIELDS = [
     "anno_scolastico",
-    "quota_campione",
     "seed",
     "tipo_gestione",
     "ordine_scuola",
@@ -285,7 +280,6 @@ DETAIL_FIELDS = [
 
 UNALLOCATED_FIELDS = [
     "anno_scolastico",
-    "quota_campione",
     "seed",
     "tipo_gestione",
     "ordine_scuola",
@@ -310,7 +304,7 @@ CAPACITY_FIELDS = [
     "capienza_classe_stimata",
 ]
 
-QC_FIELDS = ["anno_scolastico", "quota_campione", "seed", "metrica", "valore", "nota"]
+QC_FIELDS = ["anno_scolastico", "seed", "metrica", "valore", "nota"]
 
 
 def read_csv(path: Path) -> list[dict[str, str]]:
@@ -351,6 +345,8 @@ class Unit:
         "cluster",
         "alunni_italiani",
         "alunni_non_italiani",
+        "alunni_non_nati_in_Italia",
+        "alunni_nati_in_Italia",
         "alunni_totali",
         "sopra_30",
         "m_min",
@@ -374,6 +370,8 @@ class Unit:
         self.cluster = TIPO_SCUOLA_TO_CLUSTER.get(self.tipo_scuola_anagrafe)
         self.alunni_italiani = int(row["alunni_italiani"])
         self.alunni_non_italiani = int(row["alunni_non_italiani"])
+        self.alunni_non_nati_in_Italia = int(row["alunni_non_nati_in_Italia"])
+        self.alunni_nati_in_Italia = int(row["alunni_nati_in_Italia"])
         self.alunni_totali = int(row["alunni_totali"])
         self.sopra_30 = row["sopra_30"] == "1"
         self.m_min = int(row["m_min"]) if row["m_min"] != "" else None
@@ -544,9 +542,8 @@ def search_and_assign(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--quota-campione", type=float, default=0.20,
-                         help="Quota casuale (0-1) del pool m_min effettivamente simulata (default 0.20).")
-    parser.add_argument("--seed", type=int, default=42, help="Seed RNG per il campionamento (default 42).")
+    parser.add_argument("--seed", type=int, default=42,
+                         help="Seed RNG per --ordine-origine-casuale (default 42).")
     parser.add_argument("--capienza-percentile", type=float, default=95.0,
                          help="Percentile empirico usato come capienza massima per classe (default 95).")
     parser.add_argument("--consenti-cambio-gestione", action="store_true",
@@ -573,9 +570,6 @@ def run_simulation(
     print_summary: bool = True,
     detail_rows_out: list[dict[str, object]] | None = None,
 ) -> dict[str, object]:
-    if not (0.0 <= args.quota_campione <= 1.0):
-        raise SystemExit("--quota-campione deve essere tra 0 e 1")
-
     units, missing_coords = load_units_with_coords()
     if missing_coords and print_summary:
         print(f"ATTENZIONE: {missing_coords} unità senza coordinate geocodificate, escluse.")
@@ -591,13 +585,8 @@ def run_simulation(
     irrisolvibili = [u for u in all_above if u.irrisolvibile]
     sources_all = [u for u in all_above if not u.irrisolvibile and u.m_min and u.m_min > 0]
 
+    # Usato solo per --ordine-origine-casuale.
     rng = np.random.default_rng(args.seed)
-    sampled: dict[str, int] = {}
-    # Ordine di lettura del CSV (deterministico) per il campionamento: garantisce
-    # riproducibilità del seed indipendente da qualunque riordinamento successivo.
-    for u in sources_all:
-        key = f"{u.tipo_gestione}|{u.codice_scuola}|{u.ordine_scuola}|{u.anno_corso}"
-        sampled[key] = int(rng.binomial(u.m_min, args.quota_campione))
 
     # --- unità di destinazione ---
     destinations_all = [u for u in units if not u.sopra_30 and u.classi_esatte and u.classi_esatte > 0]
@@ -607,7 +596,7 @@ def run_simulation(
     for d in destinations_all:
         capacita_stimata = d.classi_esatte * capacity_table[(d.tipo_gestione, d.ordine_scuola)]
         posti_fisici = max(0, math.floor(capacita_stimata) - d.alunni_totali)
-        posti_soglia = threshold_headroom(d.alunni_totali, d.alunni_non_italiani)
+        posti_soglia = threshold_headroom(d.alunni_totali, d.alunni_non_nati_in_Italia)
         d._capacity = max(0, min(posti_fisici, posti_soglia))  # type: ignore[attr-defined]
     destinations_all = [d for d in destinations_all if d._capacity > 0]  # type: ignore[attr-defined]
 
@@ -625,7 +614,7 @@ def run_simulation(
 
     detail_rows: list[dict[str, object]] = []
     unallocated_rows: list[dict[str, object]] = []
-    total_sampled = 0
+    total_needed = 0
     total_assigned = 0
     total_unallocated = 0
     all_distances: list[float] = []
@@ -636,15 +625,13 @@ def run_simulation(
         group_dests = dest_groups.get(gkey, [])
         if not group_dests:
             for u in group_sources:
-                key = f"{u.tipo_gestione}|{u.codice_scuola}|{u.ordine_scuola}|{u.anno_corso}"
-                needed = sampled[key]
-                total_sampled += needed
+                needed = u.m_min
+                total_needed += needed
                 if needed > 0:
                     total_unallocated += needed
                     unallocated_rows.append(
                         {
                             "anno_scolastico": YEAR,
-                            "quota_campione": args.quota_campione,
                             "seed": args.seed,
                             "tipo_gestione": u.tipo_gestione,
                             "ordine_scuola": u.ordine_scuola,
@@ -675,12 +662,11 @@ def run_simulation(
         else:
             ordered_sources = sorted(
                 group_sources,
-                key=lambda u: (-(u.alunni_non_italiani / u.alunni_totali), u.codice_scuola),
+                key=lambda u: (-(u.alunni_non_nati_in_Italia / u.alunni_totali), u.codice_scuola),
             )
         for u in ordered_sources:
-            key = f"{u.tipo_gestione}|{u.codice_scuola}|{u.ordine_scuola}|{u.anno_corso}"
-            needed = sampled[key]
-            total_sampled += needed
+            needed = u.m_min
+            total_needed += needed
             if needed <= 0:
                 continue
             assignments, leftover = search_and_assign(
@@ -695,7 +681,6 @@ def run_simulation(
                 detail_rows.append(
                     {
                         "anno_scolastico": YEAR,
-                        "quota_campione": args.quota_campione,
                         "seed": args.seed,
                         "tipo_gestione": u.tipo_gestione,
                         "ordine_scuola": u.ordine_scuola,
@@ -733,7 +718,6 @@ def run_simulation(
                 unallocated_rows.append(
                     {
                         "anno_scolastico": YEAR,
-                        "quota_campione": args.quota_campione,
                         "seed": args.seed,
                         "tipo_gestione": u.tipo_gestione,
                         "ordine_scuola": u.ordine_scuola,
@@ -750,7 +734,7 @@ def run_simulation(
                     }
                 )
 
-    suffix = f"q{int(round(args.quota_campione * 100)):03d}_seed{args.seed}"
+    suffix = f"seed{args.seed}"
     if args.ordine_origine_casuale:
         suffix += "_ordcas"
     if write_outputs:
@@ -768,7 +752,6 @@ def run_simulation(
         qc_rows.append(
             {
                 "anno_scolastico": YEAR,
-                "quota_campione": args.quota_campione,
                 "seed": args.seed,
                 "metrica": metric,
                 "valore": value,
@@ -790,7 +773,7 @@ def run_simulation(
         original_capacity = d._capacity  # type: ignore[attr-defined]
         if assigned > original_capacity:
             violazioni_capacita += 1
-        new_f = d.alunni_non_italiani + assigned
+        new_f = d.alunni_non_nati_in_Italia + assigned
         new_n = d.alunni_totali + assigned
         if 10 * new_f > 3 * new_n:
             violazioni_soglia += 1
@@ -815,8 +798,7 @@ def run_simulation(
             row["codice_scuola_origine"], row["ordine_scuola"], row["anno_corso"]
         ] += row["n_studenti_non_riallocati"]
     for u in sources_all:
-        key = f"{u.tipo_gestione}|{u.codice_scuola}|{u.ordine_scuola}|{u.anno_corso}"
-        needed = sampled[key]
+        needed = u.m_min
         got = assigned_by_source.get((u.codice_scuola, u.ordine_scuola, u.anno_corso), 0)
         unalloc = unallocated_by_source.get((u.codice_scuola, u.ordine_scuola, u.anno_corso), 0)
         if got + unalloc != needed:
@@ -829,7 +811,7 @@ def run_simulation(
        "Zero alunni italiani: escluse dalla simulazione, vedi analyze.py")
     qc("unita_destinazione_candidate", len(destinations_all))
     qc("unita_destinazione_escluse_senza_classi_esatte", excluded_no_classi)
-    qc("studenti_campionati_totale", total_sampled)
+    qc("studenti_da_riallocare_totale", total_needed, "Somma di m_min sulle unità di origine.")
     qc("studenti_riallocati_totale", total_assigned)
     qc("studenti_non_riallocati_totale", total_unallocated)
     qc("violazioni_soglia_30_in_destinazioni", violazioni_soglia,
@@ -839,7 +821,7 @@ def run_simulation(
     qc("violazioni_tipologia_scuola_in_destinazioni", violazioni_tipologia_scuola,
        "Deve essere 0: nessun abbinamento può avere cluster di tipologia scolastica incompatibili.")
     qc("unita_origine_con_bilancio_incoerente", balance_errors,
-       "Deve essere 0: assegnati + non_riallocati deve sempre coincidere col campione.")
+       "Deve essere 0: assegnati + non_riallocati deve sempre coincidere con m_min.")
     qc("capienza_percentile_usato", args.capienza_percentile if MAX_LIMIT_PER_CLASS is None else "nessuno")
     qc("max_limit_per_class_usato", MAX_LIMIT_PER_CLASS if MAX_LIMIT_PER_CLASS is not None else "nessuno")
     qc("cambio_gestione_consentito", int(args.consenti_cambio_gestione))
@@ -883,7 +865,6 @@ def run_simulation(
     summary = {
         "generated_on": __import__("datetime").date.today().isoformat(),
         "school_year": YEAR_LABEL,
-        "quota_campione": args.quota_campione,
         "seed": args.seed,
         "capienza_percentile": args.capienza_percentile if MAX_LIMIT_PER_CLASS is None else None,
         "max_limit_per_class": MAX_LIMIT_PER_CLASS,
@@ -891,24 +872,25 @@ def run_simulation(
         "consenti_cambio_tipologia_scuola": args.consenti_cambio_tipologia_scuola,
         "ordine_origine_casuale": args.ordine_origine_casuale,
         "max_km_applicato": args.max_km,
-        "nota_campionamento": (
-            "quota_campione applica un campionamento Binomiale(m_min, quota_campione) "
-            "riproducibile via seed sul pool m_min di analyze.py (formula senza sostituzione). "
-            "E' uno scenario controfattuale (proxy della quota senza adeguata conoscenza "
-            "dell'italiano), non una misura osservata."
+        "nota_competenza_linguistica": (
+            "Nessun campionamento: si riallocano tutti gli m_min di analyze.py, calcolati sugli "
+            "alunni stranieri non nati in Italia (quota regionale per ordine di scuola, "
+            "riferimento MIM 2022/23) come proxy di chi non conosce l'italiano; gli stranieri "
+            "nati in Italia contano come italiani. Stima, non misura osservata."
         ),
         # Totali sulle unità in simulazione (escluse quelle senza coordinate).
         "alunni_italiani_totale": sum(u.alunni_italiani for u in units),
         "alunni_non_italiani_totale": sum(u.alunni_non_italiani for u in units),
+        "alunni_nati_in_Italia_totale": sum(u.alunni_nati_in_Italia for u in units),
+        "alunni_non_nati_in_Italia_totale": sum(u.alunni_non_nati_in_Italia for u in units),
         "unita_sopra_30_totali": len(all_above),
         "classi_sopra_30_totali": sum(u.classi_esatte for u in all_above),
         "unita_sopra_30_irrisolvibili_escluse": len(irrisolvibili),
         "unita_destinazione_candidate": len(destinations_all),
-        "studenti_m_min_pool_totale": sum(u.m_min for u in sources_all),
-        "studenti_campionati_totale": total_sampled,
+        "studenti_da_riallocare_totale": total_needed,
         "studenti_riallocati_totale": total_assigned,
         "studenti_non_riallocati_totale": total_unallocated,
-        "quota_riallocati_su_campionati": round(total_assigned / total_sampled, 4) if total_sampled else None,
+        "quota_riallocati_su_da_riallocare": round(total_assigned / total_needed, 4) if total_needed else None,
         "distanza_km": dist_stats(all_distances),
         "distanza_km_per_ordine_scuola": {k: dist_stats(v) for k, v in sorted(distances_by_order.items())},
         "distanza_km_per_regione": {k: dist_stats(v) for k, v in sorted(distances_by_region.items())},

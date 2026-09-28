@@ -16,7 +16,9 @@ Per ciascuna delle grandi città elencate in ``CITY_NAMES`` il modulo:
 5. disegna una heatmap (coropleta) statica per città e la salva come PNG in
    ``results/results_big_cities``, e una versione interattiva in HTML in cui
    ogni zona mostra al passaggio del mouse il numero di classi sopra il 30%
-   e il numero di studenti stranieri da rilocare (``m_min_sopra_30``).
+   e il numero minimo di studenti da rilocare stimato da ``analyze.py``
+   (``m_min_sopra_30``, basato sugli alunni non nati in Italia, non sulla
+   sola cittadinanza).
 
 Le zone senza alcuna classe sopra soglia restano nella mappa con il colore
 più chiaro della scala (valore 0), non vengono rimosse.
@@ -190,8 +192,9 @@ def assign_zones(points: gpd.GeoDataFrame, zones: gpd.GeoDataFrame) -> gpd.GeoDa
 def zone_metrics(joined: gpd.GeoDataFrame, city_code: int) -> pd.DataFrame:
     """Somma, per zona (COD_ASC2), le metriche dei plessi con m_min_sopra_30 > 0
     nella città data: ``classi_sopra_trenta`` (un plesso pesa quanto il suo
-    numero di classi sopra i 30 studenti, non 1) e ``m_min_sopra_30`` (studenti
-    stranieri da rilocare per ottenere il 30%)."""
+    numero di classi sopra i 30 studenti, non 1) e ``m_min_sopra_30`` (numero
+    minimo di studenti da rilocare per rientrare sotto il 30%, stimato su chi
+    non è nato in Italia)."""
 
     city_schools = joined[joined["PRO_COM"] == city_code]
     above_threshold = city_schools[city_schools["m_min_sopra_30"] > 0]
@@ -298,7 +301,7 @@ def plot_city_interactive(
         hovertemplate=(
             "<b>%{customdata[0]}</b><br>"
             "Numero di classi con oltre il trenta percento di studenti: %{z}<br>"
-            "Numero di studenti stranieri da rilocare per ottenere il 30%: "
+            "Numero minimo di studenti da rilocare per ottenere il 30%: "
             "%{customdata[1]}"
             "<extra></extra>"
         ),

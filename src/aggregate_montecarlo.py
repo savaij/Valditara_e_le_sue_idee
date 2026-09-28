@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Esegue e aggrega le simulazioni Monte Carlo per entrambe le quote."""
+"""Esegue e aggrega le simulazioni Monte Carlo su più seed."""
 
 from __future__ import annotations
 
@@ -15,14 +15,12 @@ import simulate_realloc
 ROOT = Path(__file__).resolve().parents[1]
 RESULTS = ROOT / "results"
 YEAR = "202425"
-QUOTAS = (0.20, 1.00)
 
 SCALAR_METRICS = [
-    "studenti_m_min_pool_totale",
-    "studenti_campionati_totale",
+    "studenti_da_riallocare_totale",
     "studenti_riallocati_totale",
     "studenti_non_riallocati_totale",
-    "quota_riallocati_su_campionati",
+    "quota_riallocati_su_da_riallocare",
 ]
 DISTANCE_METRICS = ["media_km", "mediana_km", "p90_km", "p95_km", "max_km", "min_km"]
 QUALITY_METRICS = [
@@ -35,9 +33,9 @@ QUALITY_METRICS = [
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Esegue N run per seed e per quota; salva un dettaglio e un riepilogo complessivi."
+        description="Esegue N run per seed; salva un dettaglio e un riepilogo complessivi."
     )
-    parser.add_argument("--n-seeds", type=int, required=True, help="Numero di seed consecutivi per quota.")
+    parser.add_argument("--n-seeds", type=int, required=True, help="Numero di seed consecutivi.")
     parser.add_argument("--seed-base", type=int, default=0, help="Primo seed (default 0).")
     parser.add_argument(
         "--ordine-origine-casuale",
@@ -84,9 +82,8 @@ def aggregate_distance_groups(
     return result
 
 
-def aggregate_quota(runs: list[dict[str, object]], quota: float) -> dict[str, object]:
+def aggregate_runs(runs: list[dict[str, object]]) -> dict[str, object]:
     result: dict[str, object] = {
-        "quota_campione": quota,
         "n_run": len(runs),
     }
     for metric in SCALAR_METRICS:
@@ -122,25 +119,23 @@ def main() -> None:
         raise SystemExit("--n-seeds deve essere maggiore di zero")
 
     seeds = range(args.seed_base, args.seed_base + args.n_seeds)
-    runs_by_quota: dict[float, list[dict[str, object]]] = {quota: [] for quota in QUOTAS}
+    runs: list[dict[str, object]] = []
 
-    for quota in QUOTAS:
-        print(f"Monte Carlo quota {quota:.2f}: {args.n_seeds} run", flush=True)
-        for index, seed in enumerate(seeds, start=1):
-            sim_args = argparse.Namespace(
-                quota_campione=quota,
-                seed=seed,
-                capienza_percentile=95.0,
-                consenti_cambio_gestione=False,
-                consenti_cambio_tipologia_scuola=False,
-                ordine_origine_casuale=args.ordine_origine_casuale,
-                max_km=None,
-            )
-            runs_by_quota[quota].append(
-                simulate_realloc.run_simulation(sim_args, write_outputs=False, print_summary=False)
-            )
-            if index % 50 == 0 or index == args.n_seeds:
-                print(f"  completati {index}/{args.n_seeds}", flush=True)
+    print(f"Monte Carlo: {args.n_seeds} run", flush=True)
+    for index, seed in enumerate(seeds, start=1):
+        sim_args = argparse.Namespace(
+            seed=seed,
+            capienza_percentile=95.0,
+            consenti_cambio_gestione=False,
+            consenti_cambio_tipologia_scuola=False,
+            ordine_origine_casuale=args.ordine_origine_casuale,
+            max_km=None,
+        )
+        runs.append(
+            simulate_realloc.run_simulation(sim_args, write_outputs=False, print_summary=False)
+        )
+        if index % 50 == 0 or index == args.n_seeds:
+            print(f"  completati {index}/{args.n_seeds}", flush=True)
 
     suffix_order = "_ordcas" if args.ordine_origine_casuale else ""
     last_seed = args.seed_base + args.n_seeds - 1
@@ -150,30 +145,29 @@ def main() -> None:
     detail = {
         "generated_on": date.today().isoformat(),
         "school_year": "2024/25",
-        "n_seed_per_quota": args.n_seeds,
+        "n_seed": args.n_seeds,
         "seed_base": args.seed_base,
         "seed_finale": last_seed,
         "ordine_origine_casuale": args.ordine_origine_casuale,
         "max_limit_per_class": simulate_realloc.MAX_LIMIT_PER_CLASS,
-        "runs": [run for quota in QUOTAS for run in runs_by_quota[quota]],
+        "runs": runs,
     }
     summary = {
         "generated_on": date.today().isoformat(),
         "school_year": "2024/25",
-        "n_seed_per_quota": args.n_seeds,
+        "n_seed": args.n_seeds,
         "seed_base": args.seed_base,
         "seed_finale": last_seed,
         "ordine_origine_casuale": args.ordine_origine_casuale,
         "max_limit_per_class": simulate_realloc.MAX_LIMIT_PER_CLASS,
         "nota": (
             "Media, deviazione standard campionaria, minimo e massimo delle metriche per seed. "
-            "La variabilità include il campionamento Binomiale(m_min, quota_campione) e, "
-            "se attivo, l'ordine casuale delle unità di origine."
+            "Ogni run rialloca esattamente m_min per ciascuna unità sopra soglia (nessun "
+            "campionamento); la variabilità tra seed deriva solo, se attivo, dall'ordine casuale "
+            "con cui le unità di origine competono per le stesse destinazioni "
+            "(--ordine-origine-casuale)."
         ),
-        "scenari": {
-            f"q{int(round(quota * 100)):03d}": aggregate_quota(runs_by_quota[quota], quota)
-            for quota in QUOTAS
-        },
+        **aggregate_runs(runs),
     }
 
     RESULTS.mkdir(parents=True, exist_ok=True)

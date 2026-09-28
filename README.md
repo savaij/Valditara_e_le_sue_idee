@@ -17,7 +17,7 @@ e il [confronto per gruppo scolastico](results/comuni_cambio_comune_202425_confr
 riportano il dettaglio. Le sezioni successive descrivono revisioni precedenti;
 i loro numeri e parametri non descrivono necessariamente questo nuovo scenario.
 
-Questo progetto calcola, come esercizio controfattuale, quante unità didattiche superano la soglia stretta del 30% di alunni con cittadinanza non italiana, quale sarebbe il minimo numero di riallocazioni necessario per riportarle alla soglia (senza applicare il criterio della conoscenza dell'italiano, che non è misurabile con questi dati), e — a partire da questa revisione — simula concretamente dove questi studenti potrebbero essere ricollocati e quanto lontano dovrebbero spostarsi.
+Questo progetto calcola, come esercizio controfattuale, quante unità didattiche superano la soglia stretta del 30% di alunni stranieri non nati in Italia — usata come proxy di chi non conosce l'italiano, poiché la competenza linguistica non è misurabile con questi dati (i nati in Italia contano come italiani; vedi "Stima degli alunni non nati in Italia" più sotto) — quale sarebbe il minimo numero di riallocazioni necessario per riportarle alla soglia, e simula concretamente dove questi studenti potrebbero essere ricollocati e quanto lontano dovrebbero spostarsi.
 
 ## Aggiornamento di questa revisione
 
@@ -29,11 +29,13 @@ Sotto l'ipotesi corretta — **spostamento senza sostituzione, N diminuisce insi
 M_min = ceil(max(0, 10F − 3N) / 7)
 ```
 
-invece di `ceil(max(0, F − 0,30·N))`. La differenza non è cosmetica: **a livello nazionale il numero corretto di spostamenti è 103.523, il 37,4% in più dei 75.373 calcolati con la formula precedente** (mantenuta come `m_min_con_sostituzione_legacy` per trasparenza — vedi `results/summary_202425.json`). La verifica è stata fatta anche per via numerica su 500.000 coppie casuali `(N, F)`, confermando che la nuova formula è sempre minima e sufficiente.
+invece di `ceil(max(0, F − 0,30·N))`. La differenza non è cosmetica: **a livello nazionale il numero corretto di spostamenti è 894, il 15,4% in più dei 775 calcolati con la formula precedente** (mantenuta come `m_min_con_sostituzione_legacy` per trasparenza — vedi `results/summary_202425.json`). La verifica è stata fatta anche per via numerica su 500.000 coppie casuali `(N, F)`, confermando che la nuova formula è sempre minima e sufficiente.
 
-La correzione espone anche un caso limite genuino: **226 unità a livello nazionale hanno zero alunni con cittadinanza italiana** (`N = F`). In questi casi rimuovere solo alunni non italiani non cambia mai la quota (resta 100% finché resta almeno uno studente): sono matematicamente **irrisolvibili per pura sottrazione**, senza importare alunni italiani. Sono flaggate con `m_min_irrisolvibile = 1`, escluse dalle somme di `M_min` e dalla simulazione di spostamento (vedi sotto), e contate separatamente ovunque.
+La correzione espone anche un caso limite genuino: **30 unità a livello nazionale hanno zero alunni nati in Italia** (`N = F`, con `F = alunni_non_nati_in_Italia`, vedi sotto). In questi casi rimuovere solo alunni non nati in Italia non cambia mai la quota (resta 100% finché resta almeno uno studente): sono matematicamente **irrisolvibili per pura sottrazione**, senza importare alunni nati in Italia. Sono flaggate con `m_min_irrisolvibile = 1`, escluse dalle somme di `M_min` e dalla simulazione di spostamento (vedi sotto), e contate separatamente ovunque.
 
 Questa revisione aggiunge inoltre una **simulazione realistica degli spostamenti** (`src/simulate_realloc.py`): per ogni studente da riallocare cerca la sede ricevente equivalente più vicina con posti disponibili, rispettandone capacità e soglia del 30%, e misura la distanza percorsa — si veda la sezione dedicata più sotto.
+
+**Aggiornamento successivo**: la stima di `F` non usa più direttamente la cittadinanza (`alunni_non_italiani`), ma `alunni_non_nati_in_Italia` come proxy di chi non conosce l'italiano — vedi "Stima degli alunni non nati in Italia" più sotto. I numeri di questa sezione e della tabella successiva riflettono già questa stima.
 
 ## Risultato nazionale sintetico
 
@@ -45,19 +47,20 @@ Per il totale combinato statali + paritarie:
 
 | Indicatore | Valore |
 |---|---:|
-| Unità analizzate | 134.784 |
-| Unità con `p > 0,30` | 13.806 |
-| — di cui irrisolvibili per pura sottrazione (`N = F`) | 226 |
-| Studenti nelle unità sopra soglia | 542.790 |
-| Alunni con cittadinanza non italiana nelle unità sopra soglia | 231.586 |
-| `M_min` (senza sostituzione, unità irrisolvibili escluse) | **103.523** |
-| `M_min_con_sostituzione` (formula legacy, N costante) | 75.373 |
-| `M_min` / non italiani nelle unità sopra soglia | 44,70% |
-| `M_min` / studenti nelle unità sopra soglia | 19,07% |
-| `M_min` / non italiani in tutte le unità analizzate | 13,58% |
-| `M_min` / studenti in tutte le unità analizzate | 1,59% |
+| Unità analizzate | 115.454 |
+| Unità con `p > 0,30` | 517 |
+| — di cui irrisolvibili per pura sottrazione (`N = F`) | 30 |
+| Studenti nelle unità sopra soglia | 4.998 |
+| Alunni con cittadinanza non italiana nelle unità sopra soglia | 3.669 |
+| Alunni non nati in Italia nelle unità sopra soglia (`F`, stima) | 1.945 |
+| `M_min` (senza sostituzione, unità irrisolvibili escluse) | **894** |
+| `M_min_con_sostituzione` (formula legacy, N costante) | 775 |
+| `M_min` / non nati in Italia nelle unità sopra soglia | 45,96% |
+| `M_min` / studenti nelle unità sopra soglia | 17,89% |
+| `M_min` / non nati in Italia in tutte le unità analizzate | 0,33% |
+| `M_min` / studenti in tutte le unità analizzate | 0,014% |
 
-Le percentuali con suffisso `_sopra_30` usano come denominatore solo le unità sopra soglia; quelle con suffisso `_analizzati` usano tutte le unità del livello di aggregazione. Cifre esatte in `results/summary_202425.json` e `results/aggregati_nazionale_202425.csv`.
+Le percentuali con suffisso `_sopra_30` usano come denominatore solo le unità sopra soglia; quelle con suffisso `_analizzati` usano tutte le unità del livello di aggregazione. `F` (alunni non nati in Italia) è una stima per unità — vedi "Stima degli alunni non nati in Italia" più sotto — non una misura osservata come `alunni_non_italiani` (cittadinanza). Cifre esatte in `results/summary_202425.json`, calcolato su `data_processed/unita_sopra_30_202425.csv` (tutte le unità con `p > 0,30`, senza soglia minima di alunni). `results/aggregati_202425.csv` e `results/aggregati_nazionale_202425.csv` sono invece calcolati solo sulle unità con almeno 10 alunni totali (la stessa soglia minima usata dalla simulazione, sezione successiva, e da `check_change_comune.py`): per questo il loro conteggio di unità sopra soglia (150) e `M_min` (512) sono più bassi.
 
 ## Simulazione realistica degli spostamenti
 
@@ -91,47 +94,57 @@ La capienza stimata di un'unità è `classi_esatte × capienza_classe_stimata`; 
 
 In `src/simulate_realloc.py`, `MAX_LIMIT_PER_CLASS` può essere impostata a un intero positivo: in quel caso sostituisce il percentile empirico come capienza massima per classe. Con il valore predefinito `None` resta attiva la stima al percentile configurato da `--capienza-percentile`.
 
-Una destinazione può inoltre ricevere al più `floor((3N − 10F) / 7)` alunni non italiani aggiuntivi senza superare essa stessa la soglia del 30% (stessa aritmetica esatta usata per `M_min`); il tetto finale di posti ricevibili è il minimo tra capienza fisica e questo vincolo di soglia.
+Una destinazione può inoltre ricevere al più `floor((3N − 10F) / 7)` alunni non nati in Italia aggiuntivi senza superare essa stessa la soglia del 30% (stessa aritmetica esatta usata per `M_min`, con `F = alunni_non_nati_in_Italia`); il tetto finale di posti ricevibili è il minimo tra capienza fisica e questo vincolo di soglia.
 
-### Campionamento controfattuale (`--quota-campione`, default 0,20)
+### Stima degli alunni non nati in Italia (proxy della competenza linguistica)
 
-Il criterio del 30% MIM riguarda la **cittadinanza**, non la competenza linguistica. Poiché i dati non contengono alcuna misura di conoscenza dell'italiano, `--quota-campione` (default **0,20**) applica la simulazione di spostamento realistico solo a un sottoinsieme casuale — estratto con distribuzione Binomiale, seed fisso e riproducibile — degli studenti individuati da `M_min` per ciascuna unità sopra soglia, **come proxy puramente controfattuale** della quota che potrebbe non avere una conoscenza adeguata dell'italiano.
+Il criterio del 30% MIM riguarda la **cittadinanza**, non la competenza linguistica, e i dati non contengono alcuna misura diretta della conoscenza dell'italiano. Invece di campionare una quota arbitraria del pool `M_min`, la stima di chi non conosce l'italiano è ora fatta **a monte, in `analyze.py`**, per ciascuna unità:
 
-Non è una stima empirica della reale prevalenza di scarsa competenza linguistica: è un parametro di scenario, chiaramente distinto dai dati osservati (ogni riga di output riporta le colonne `quota_campione` e `seed`). Con `--quota-campione 1.0` si ottiene lo scenario "pieno" (tutto il pool `M_min`), usato come limite superiore di confronto.
+```
+alunni_non_nati_in_Italia = round_half_up(alunni_non_italiani × (100 − per100) / 100)
+```
 
-Il campionamento è a livello di unità (non di singolo studente, che non è identificabile nei dati aggregati MIM): per ogni unità sopra soglia si estrae `Binomiale(M_min_unità, quota_campione)` con `numpy.random.default_rng(seed)`, iterando le unità nell'ordine deterministico con cui sono scritte in `unita_202425.csv`, cosicché il risultato non dipende da altri riordinamenti dello script.
+dove `per100` è la quota di alunni stranieri **nati in Italia** ogni 100 alunni stranieri, per `(regione, ordine di scuola)`, dalla distribuzione di riferimento MIM 2022/23 (`distribuzioni_di_riferimento/alunni_cittadinanza_non_italiana_nati_in_italia_2022_2023.csv`; colonne `primaria_per100`, `secondaria_I_per100`, `secondaria_II_per100`). L'arrotondamento è per unità, allo 0,5 verso l'alto (`round_half_up`), su aritmetica intera esatta (niente errori di virgola mobile, dato che `per100` ha un solo decimale).
+
+Gli stranieri nati in Italia contano come italiani a tutti gli effetti: `alunni_nati_in_Italia = alunni_totali − alunni_non_nati_in_Italia`. `sopra_30`, `m_min` e tutta la simulazione di spostamento sono calcolati su `alunni_non_nati_in_Italia`, non più sulla sola cittadinanza (`alunni_italiani`/`alunni_non_italiani` restano disponibili come conteggi per cittadinanza, invariati). Non è una stima empirica della reale prevalenza di scarsa competenza linguistica: è una proxy regionale su dati di riferimento esterni, chiaramente distinta dai dati osservati (colonne `quota_non_nati_in_Italia_riferimento` e `alunni_non_nati_in_Italia` in `unita_202425.csv`).
+
+`src/simulate_realloc.py` non applica più alcun campionamento: **ogni unità sopra soglia rialloca esattamente il proprio `m_min`** così calcolato. Il parametro `--seed` resta, ma serve solo per `--ordine-origine-casuale` (vedi sotto); non esiste più una quota di scenario da passare via riga di comando.
 
 ### Algoritmo di assegnazione
 
 Per ciascun gruppo `(tipo_gestione, ordine_scuola, anno_corso)`:
 
-1. le unità di origine sono processate in ordine deterministico (quota di non italiani decrescente, poi codice_scuola) — priorità alle unità più sopra soglia;
+1. le unità di origine sono processate in ordine deterministico (quota di non nati in Italia decrescente, poi codice_scuola) — priorità alle unità più sopra soglia;
 2. per ciascuna unità, si cercano le destinazioni con posti disponibili più vicine tramite una griglia spaziale a celle di 0,25° con ricerca ad anelli crescenti, poi si calcola la distanza geodetica esatta (formula haversine, Terra come sfera, coordinate dal file di geocoding già presente nel progetto — copertura 100% dei plessi);
-3. gli studenti campionati vengono assegnati alle destinazioni più vicine finché la domanda è soddisfatta o la capacità disponibile nel gruppo nazionale è esaurita (il residuo è marcato "non riallocabile");
+3. gli studenti da riallocare (tutto `m_min` dell'unità) vengono assegnati alle destinazioni più vicine finché la domanda è soddisfatta o la capacità disponibile nel gruppo nazionale è esaurita (il residuo è marcato "non riallocabile");
 4. le capacità delle destinazioni si aggiornano progressivamente: unità di origine vicine competono per gli stessi posti; chi viene processato prima (per severità) ha priorità. È quindi un'euristica greedy, non un ottimo globale.
 
 La distanza riportata è quella **geodetica in linea d'aria**, non la distanza stradale reale: è un limite noto, dichiarato nei risultati (la distanza stradale/di percorrenza reale sarebbe sistematicamente maggiore, specie in territori collinari o insulari).
 
 ### Risultati della simulazione (seed 42)
 
-| | Scenario default (20%) | Scenario completo (100%) |
-|---|---:|---:|
-| Studenti campionati | 20.689 | 103.523 |
-| Studenti riallocati | 20.689 (100%) | 103.523 (100%) |
-| Studenti non riallocabili | 0 | 0 |
-| Distanza media | 2,40 km | 5,90 km |
-| Distanza mediana | 1,63 km | 3,49 km |
-| Distanza p90 | 5,55 km | 13,39 km |
-| Distanza p95 | 7,62 km | 19,29 km |
-| Distanza massima | 36,37 km | 80,58 km |
+La simulazione opera sulle sole unità con `anno_corso == 1` (vedi `data_processed/unita_202425.csv` filtrato in `simulate_realloc.py`), un sottoinsieme delle unità analizzate da `analyze.py`; per questo i totali qui sotto (da `results/simulazione_riepilogo_202425_seed42.json`) non coincidono con la tabella nazionale sopra, che copre tutti gli anni di corso.
 
-Con le ipotesi di capacità adottate (percentile 95° empirico), il pool nazionale di sedi riceventi candidate (106.606 unità) è ampio rispetto alla domanda anche nello scenario completo: **tutti** gli studenti campionati risultano riallocabili in entrambi gli scenari, con distanze mediane dell'ordine di 1,6–3,5 km. Le code sono però informative: gli spostamenti più lunghi (fino a ~80 km nello scenario completo) si concentrano in aree dove **molte unità sopra soglia sono clusterizzate** (es. la provincia di Piacenza, dove nello scenario completo diverse unità esauriscono la capacità ricevente locale e vengono abbinate a plessi in Brianza, a 70-80 km) — un effetto di concentrazione geografica della quota di alunni non italiani che l'aggregato nazionale nasconde. Si vedano `results/simulazione_riepilogo_202425_q*.json` per la rottura completa per ordine di scuola e regione, e `results/simulazione_spostamenti_dettaglio_202425_q*.csv` per il dettaglio origine→destinazione.
+| Indicatore | Valore |
+|---|---:|
+| Unità sopra soglia in simulazione | 50 |
+| Unità di destinazione candidate | 25.368 |
+| Studenti da riallocare (`m_min`, nessun campionamento) | 150 |
+| Studenti riallocati | 150 (100%) |
+| Studenti non riallocabili | 0 |
+| Distanza media | 7,68 km |
+| Distanza mediana | 6,59 km |
+| Distanza p90 | 15,68 km |
+| Distanza p95 | 22,01 km |
+| Distanza massima | 39,42 km |
 
-**Questo risultato "tutto riallocabile" dipende interamente dalle ipotesi di capacità e sostituibilità sopra descritte**: è la lettura ottimistica compatibile con i dati disponibili, non una garanzia. In particolare non modella: continuità del percorso scolastico, preferenze familiari, fratelli nella stessa scuola, tempi di trasporto reali, disponibilità di trasporto pubblico/scolastico, tempistiche amministrative, né l'indirizzo di studio nella secondaria di II grado (vedi limiti sopra). Riducendo il percentile di capienza (`--capienza-percentile`) o imponendo un tetto di distanza realistico (`--max-km`) la quota di studenti non riallocabili aumenta: si veda la sezione "Riproduzione" per rieseguire con parametri diversi.
+Con le ipotesi di capacità adottate (limite esplicito di 30 alunni/classe, `MAX_LIMIT_PER_CLASS`), il pool nazionale di sedi riceventi candidate è ampio rispetto alla domanda: **tutti e 150** gli studenti da riallocare risultano collocabili, con distanza mediana di 6,6 km. Le code sono comunque informative: gli spostamenti più lunghi (fino a ~39 km) si concentrano in regioni dove le unità sopra soglia sono poche e sparse (es. Basilicata, dove la mediana supera i 30 km) — un effetto di concentrazione geografica che l'aggregato nazionale nasconde. Si veda `results/simulazione_riepilogo_202425_seed42.json` per la rottura completa per ordine di scuola e regione, e `results/simulazione_spostamenti_dettaglio_202425_seed42.csv` per il dettaglio origine→destinazione.
+
+**Questo risultato "tutto riallocabile" dipende interamente dalle ipotesi di capacità e sostituibilità sopra descritte**: è la lettura ottimistica compatibile con i dati disponibili, non una garanzia. In particolare non modella: continuità del percorso scolastico, preferenze familiari, fratelli nella stessa scuola, tempi di trasporto reali, disponibilità di trasporto pubblico/scolastico, tempistiche amministrative, né l'indirizzo di studio nella secondaria di II grado (vedi limiti sopra). Riducendo il percentile di capienza (`--capienza-percentile`, se `MAX_LIMIT_PER_CLASS` è disattivato) o imponendo un tetto di distanza realistico (`--max-km`) la quota di studenti non riallocabili aumenta: si veda la sezione "Riproduzione" per rieseguire con parametri diversi.
 
 ### Controlli di qualità della simulazione
 
-Nelle simulazioni singole, `results/controlli_qualita_simulazione_202425_q*.csv` verifica per ogni run soglia del 30%, capacità, compatibilità di tipologia e bilancio degli studenti. Nel Monte Carlo gli stessi controlli sono inclusi nelle metriche per run e aggregati nel riepilogo.
+Nelle simulazioni singole, `results/controlli_qualita_simulazione_202425_seed{S}.csv` verifica per ogni run soglia del 30%, capacità, compatibilità di tipologia e bilancio degli studenti. Nel Monte Carlo gli stessi controlli sono inclusi nelle metriche per run e aggregati nel riepilogo.
 
 ## File principali
 
@@ -146,13 +159,11 @@ Nelle simulazioni singole, `results/controlli_qualita_simulazione_202425_q*.csv`
 - `results/top_100_unita_sopra_30_202425.csv`: prime 100 unità ordinate per quota e `M_min`.
 - `results/summary_202425.json`: riepilogo machine-readable del calcolo `M_min`.
 - `results/mappa_scuole_202425.html`: mappa interattiva dei plessi con `m_min_sopra_30 > 0` (generata da `src/plot_schools.py`).
-- Con una singola simulazione (`src/simulate_realloc.py` o `bash src/run_simulation.sh`), i file `simulazione_spostamenti_dettaglio`, `simulazione_non_riallocabili`, `simulazione_riepilogo`, `simulazione_distribuzione_distanze` e `controlli_qualita_simulazione` vengono salvati in `results/` con suffisso `202425_q{Q}_seed{S}`. Il dettaglio CSV contiene le coppie origine→destinazione; il riepilogo JSON include metriche per ordine di scuola e regione.
-- Con `bash src/run_simulation.sh --montecarlo N [SEED_BASE]`, il runner salva solo due file complessivi in `results/`: `simulazione_montecarlo_dettaglio_202425_nN_seedBASE-ULTIMO_ordcas.json` contiene le metriche di ogni run per entrambe le quote (20% e 100%); `simulazione_montecarlo_202425_nN_seedBASE-ULTIMO_ordcas.json` contiene media, deviazione standard, minimo e massimo per le metriche aggregate in ciascuno scenario.
+- Con una singola simulazione (`src/simulate_realloc.py` o `bash src/run_simulation.sh`), i file `simulazione_spostamenti_dettaglio`, `simulazione_non_riallocabili`, `simulazione_riepilogo`, `simulazione_distribuzione_distanze` e `controlli_qualita_simulazione` vengono salvati in `results/` con suffisso `202425_seed{S}` (`S` = seed; con `--ordine-origine-casuale` il suffisso diventa `202425_seed{S}_ordcas`). Il dettaglio CSV contiene le coppie origine→destinazione; il riepilogo JSON include metriche per ordine di scuola e regione.
+- Con `bash src/run_simulation.sh --montecarlo N [SEED_BASE]`, il runner salva solo due file complessivi in `results/`: `simulazione_montecarlo_dettaglio_202425_nN_seedBASE-ULTIMO_ordcas.json` contiene le metriche di ogni run; `simulazione_montecarlo_202425_nN_seedBASE-ULTIMO_ordcas.json` contiene media, deviazione standard, minimo e massimo per le metriche aggregate su tutti i run. Non c'è più una dimensione di quota: ogni run rialloca esattamente `m_min` per unità, e la variabilità tra run viene solo dall'ordine casuale delle unità di origine.
 - Per ispezionare gli spostamenti estremi del Monte Carlo, `python3 src/inspect_montecarlo_outliers.py` rilegge il JSON di dettaglio predefinito, riesegue i 10 run con massimo più alto sopra 500 km e salva le coppie origine→destinazione in un CSV con coordinate. Usare `--soglia-km 100` per abbassare la soglia, `--top-runs 0` per rieseguire tutti i run sopra soglia, oppure passare un altro JSON e/o `--output percorso.csv`.
 - `metadata/fonti.csv`: URL di download, anno scolastico e data di riferimento dei file.
 - `metadata/sha256_raw.csv`: hash SHA-256 dei file grezzi presenti al momento dell'elaborazione.
-
-Nei nomi dei file della simulazione singola, `Q` e `S` codificano rispettivamente `quota_campione` (in percento, es. `q020` = 0,20) e `seed`.
 
 ## Fonti e scelta dell'anno
 
@@ -166,19 +177,19 @@ Sono stati inclusi entrambi i tipi di gestione: statale e paritaria. Le anagrafi
 - La metadatazione MIM dei flussi studenti/classi indica dati nazionali con esclusione delle province autonome di Trento e Bolzano. Aosta non produce righe nel flusso studenti scaricato; non è stata trasformata in zero.
 - L'anagrafe statale/paritaria standard esclude Trento, Bolzano e Aosta; le anagrafiche autonome sono comunque state scaricate come controllo/fallback. Il risultato è quindi riferito alle unità effettivamente presenti nei flussi studenti e non pretende di stimare i territori mancanti.
 - Le righe del flusso classi/studenti con `ANNOCORSOCLASSE = 7` rappresentano pluriclassi. Non sono assegnate artificialmente ai singoli anni di corso: per queste unità `classi_esatte` resta vuoto, mentre `N`, `F`, `p` e `M_min` vengono dal flusso per cittadinanza. Il controllo sui totali dell'intero flusso classi/studenti coincide con il totale del flusso cittadinanza.
-- Su 134.784 unità di cittadinanza, 4.910 non hanno una chiave corso esatta nel flusso classi/studenti (4.868 statali e 42 paritarie); questo limita il campo accessorio sulle classi (e quindi l'ammissibilità come destinazione nella simulazione), non il calcolo del 30% in sé.
+- Sulle 115.454 unità di cittadinanza incluse nell'analisi (dopo il filtro `alunni_totali ≥ 10`), 499 non hanno una chiave corso esatta nel flusso classi/studenti; questo limita il campo accessorio sulle classi (e quindi l'ammissibilità come destinazione nella simulazione), non il calcolo del 30% in sé.
 - Il flusso MIM non contiene l'indirizzo di studio per la secondaria di II grado (liceo/tecnico/professionale e relative articolazioni): la simulazione tratta come equivalenti unità che nella realtà non lo sono sempre, per questo ordine di scuola. Vedi la sezione "Simulazione realistica degli spostamenti".
 - `M_min` (senza sostituzione) è comunque un limite inferiore aritmetico per unità, non un piano di assegnazione completo: la simulazione (sezione precedente) tenta di colmare questo gap, ma resta un'euristica greedy con le ipotesi di capacità e campionamento dichiarate, non un modello di scelta scolastica reale (non modella preferenze, fratelli, continuità didattica, trasporto, tempistiche amministrative).
-- 226 unità (statali + paritarie) hanno zero alunni italiani e sono matematicamente irrisolvibili per pura sottrazione di alunni non italiani: sono escluse dalle somme di `M_min` e dalla simulazione, e riportate separatamente.
+- 30 unità (statali + paritarie, tra quelle sopra soglia) hanno zero alunni nati in Italia (`N = F`) e sono matematicamente irrisolvibili per pura sottrazione di alunni non nati in Italia: sono escluse dalle somme di `M_min` e dalla simulazione, e riportate separatamente.
 
 ## Regole di calcolo
 
 Per ogni unità:
 
-- `N = ALUNNI` e `F = ALUNNICITTADINANZANONITALIANA` dal flusso MIM per cittadinanza;
+- `N = ALUNNI` dal flusso MIM per cittadinanza e `F = alunni_non_nati_in_Italia`, la stima per unità descritta in "Stima degli alunni non nati in Italia" più sotto (`alunni_non_italiani` per cittadinanza rimane disponibile come colonna separata, ma non è più la base di `p`, `sopra_30` e `M_min`);
 - `p = F / N`;
 - sopra soglia se `10 × F > 3 × N` (confronto esatto, quindi la soglia è strettamente `p > 0,30`);
-- **`M_min = ceil(max(0, 10F − 3N) / 7)`** — minimo intero `m` tale che `(F−m)/(N−m) ≤ 0,30`, spostamento **senza sostituzione** (`N` diminuisce di `m`), aritmetica intera esatta. Se `N = F > 0` (zero alunni italiani), l'unità è flaggata `m_min_irrisolvibile = 1` e `M_min` resta vuoto: nessun `m` finito soddisfa il vincolo per pura sottrazione.
+- **`M_min = ceil(max(0, 10F − 3N) / 7)`** — minimo intero `m` tale che `(F−m)/(N−m) ≤ 0,30`, spostamento **senza sostituzione** (`N` diminuisce di `m`), aritmetica intera esatta. Se `N = F > 0` (zero alunni nati in Italia), l'unità è flaggata `m_min_irrisolvibile = 1` e `M_min` resta vuoto: nessun `m` finito soddisfa il vincolo per pura sottrazione.
 - `M_min_con_sostituzione_legacy = max(0, ceil(F − 0,30·N))` — formula della versione precedente di questo progetto, valida solo se ogni studente spostato è sostituito 1:1 mantenendo `N` costante; mantenuta per trasparenza/confronto, non usata come indicatore principale.
 
 La chiave di join con classi/studenti è `CodiceScuola + OrdineScuola + AnnoCorso` (`ANNOCORSOCLASSE` nel flusso classi); la chiave con l'anagrafe è `CodiceScuola`. Nessuna unità di cittadinanza è rimasta senza anagrafica nel run consegnato.
@@ -190,8 +201,8 @@ Dalla radice del progetto:
 ```bash
 bash src/download_data.sh    # opzionale: riscarica i CSV MIM
 bash src/run_analysis.sh     # M_min per unità + aggregazioni (richiede pandas)
-bash src/run_simulation.sh   # simulazione realistica: scenario 20% (default) + 100% (seed 42)
-bash src/run_simulation.sh --montecarlo 500   # 500 seed per quota, due JSON complessivi
+bash src/run_simulation.sh   # simulazione realistica, run singola (default seed 42)
+bash src/run_simulation.sh --montecarlo 500   # 500 seed, due JSON complessivi (Monte Carlo)
 ```
 
 `run_analysis.sh` richiede **pandas** per leggere, unire e aggregare i dataset.
@@ -202,14 +213,14 @@ il calcolo vettoriale delle distanze. Per installare entrambe le dipendenze:
 pip install pandas numpy
 ```
 
-Per rieseguire la simulazione con parametri diversi (quota di campionamento, seed, percentile di capienza, tetto di distanza):
+Per rieseguire la simulazione con parametri diversi (seed, ordine casuale delle unità di origine, percentile di capienza, tetto di distanza):
 
 ```bash
-python3 src/simulate_realloc.py --quota-campione 0.20 --seed 42
-python3 src/simulate_realloc.py --quota-campione 1.00 --seed 42          # scenario completo
-python3 src/simulate_realloc.py --quota-campione 0.20 --seed 7           # sensitività al seed
-python3 src/simulate_realloc.py --quota-campione 0.20 --capienza-percentile 75   # capienza più prudente
-python3 src/simulate_realloc.py --quota-campione 1.00 --max-km 30        # tetto di distanza realistico
+python3 src/simulate_realloc.py --seed 42
+python3 src/simulate_realloc.py --seed 7                                  # sensitività al seed (con --ordine-origine-casuale)
+python3 src/simulate_realloc.py --seed 42 --ordine-origine-casuale        # ordine di origine casuale invece che deterministico
+python3 src/simulate_realloc.py --seed 42 --capienza-percentile 75        # capienza più prudente (richiede MAX_LIMIT_PER_CLASS = None)
+python3 src/simulate_realloc.py --seed 42 --max-km 30                     # tetto di distanza realistico
 ```
 
-La simulazione usa `MAX_LIMIT_PER_CLASS = None` in `src/simulate_realloc.py` per mantenere la stima empirica predefinita. La data di generazione del run consegnato è 22 settembre 2026.
+Nel run consegnato `src/simulate_realloc.py` usa il valore predefinito `MAX_LIMIT_PER_CLASS = 30` (limite esplicito di alunni per classe); impostarlo a `None` nello script attiva invece la stima empirica al percentile configurato da `--capienza-percentile`. La data di generazione del run consegnato è 28 settembre 2026.

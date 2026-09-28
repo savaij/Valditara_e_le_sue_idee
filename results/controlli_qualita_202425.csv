@@ -8,12 +8,14 @@ anno_scolastico,metrica,tipo_gestione,valore,nota
 202425,unità_incluse,statale,113665,
 202425,studenti_inclusi,statale,5980898,N base dell'analisi; le metriche seguenti sono calcolate solo sulle unità incluse.
 202425,non_italiani_inclusi,statale,719502,
-202425,unità_sopra_30,statale,12213,
-202425,studenti_in_unità_sopra_30,statale,512694,
-202425,non_italiani_in_unità_sopra_30,statale,217794,
-202425,m_min_in_unità_sopra_30,statale,96288,Formula senza sostituzione (N diminuisce); esclude le unità irrisolvibili.
-202425,m_min_con_sostituzione_legacy_in_unità_sopra_30,statale,69830,"Formula originaria del repository (N costante, sostituzione 1:1); sottostima il numero di spostamenti se gli studenti non vengono sostituiti."
-202425,unità_sopra_30_irrisolvibili,statale,147,Unità con zero alunni italiani (N=F): la sola rimozione di alunni non italiani non può mai portarle sotto il 30%.
+202425,non_nati_in_Italia_inclusi,statale,270487,"Stima: non italiani x quota regionale per ordine di non nati in Italia (riferimento MIM 2022/23), arrotondata per unità. Base del criterio del 30%."
+202425,unità_sopra_30,statale,375,
+202425,studenti_in_unità_sopra_30,statale,4001,
+202425,non_italiani_in_unità_sopra_30,statale,2943,
+202425,non_nati_in_Italia_in_unità_sopra_30,statale,1530,
+202425,m_min_in_unità_sopra_30,statale,662,Formula senza sostituzione (N diminuisce); esclude le unità irrisolvibili.
+202425,m_min_con_sostituzione_legacy_in_unità_sopra_30,statale,573,"Formula originaria del repository (N costante, sostituzione 1:1); sottostima il numero di spostamenti se gli studenti non vengono sostituiti."
+202425,unità_sopra_30_irrisolvibili,statale,18,Unità con zero alunni italiani (N=F): la sola rimozione di alunni non italiani non può mai portarle sotto il 30%.
 202425,righe_dataset_classi_studenti,statale,116317,
 202425,studenti_totali_classi_studenti,statale,6172717,
 202425,classi_totali,statale,325878,
@@ -36,12 +38,14 @@ anno_scolastico,metrica,tipo_gestione,valore,nota
 202425,unità_incluse,paritaria,14991,
 202425,studenti_inclusi,paritaria,342921,N base dell'analisi; le metriche seguenti sono calcolate solo sulle unità incluse.
 202425,non_italiani_inclusi,paritaria,19146,
-202425,unità_sopra_30,paritaria,579,
-202425,studenti_in_unità_sopra_30,paritaria,7679,
-202425,non_italiani_in_unità_sopra_30,paritaria,3535,
-202425,m_min_in_unità_sopra_30,paritaria,1818,Formula senza sostituzione (N diminuisce); esclude le unità irrisolvibili.
-202425,m_min_con_sostituzione_legacy_in_unità_sopra_30,paritaria,1531,"Formula originaria del repository (N costante, sostituzione 1:1); sottostima il numero di spostamenti se gli studenti non vengono sostituiti."
-202425,unità_sopra_30_irrisolvibili,paritaria,38,Unità con zero alunni italiani (N=F): la sola rimozione di alunni non italiani non può mai portarle sotto il 30%.
+202425,non_nati_in_Italia_inclusi,paritaria,7329,"Stima: non italiani x quota regionale per ordine di non nati in Italia (riferimento MIM 2022/23), arrotondata per unità. Base del criterio del 30%."
+202425,unità_sopra_30,paritaria,142,
+202425,studenti_in_unità_sopra_30,paritaria,997,
+202425,non_italiani_in_unità_sopra_30,paritaria,726,
+202425,non_nati_in_Italia_in_unità_sopra_30,paritaria,415,
+202425,m_min_in_unità_sopra_30,paritaria,232,Formula senza sostituzione (N diminuisce); esclude le unità irrisolvibili.
+202425,m_min_con_sostituzione_legacy_in_unità_sopra_30,paritaria,202,"Formula originaria del repository (N costante, sostituzione 1:1); sottostima il numero di spostamenti se gli studenti non vengono sostituiti."
+202425,unità_sopra_30_irrisolvibili,paritaria,12,Unità con zero alunni italiani (N=F): la sola rimozione di alunni non italiani non può mai portarle sotto il 30%.
 202425,righe_dataset_classi_studenti,paritaria,14966,
 202425,studenti_totali_classi_studenti,paritaria,342921,
 202425,classi_totali,paritaria,20183,

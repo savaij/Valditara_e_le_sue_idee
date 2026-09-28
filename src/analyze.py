@@ -8,6 +8,18 @@ chiave del corso coincide. Le anagrafiche sono unite tramite CodiceScuola.
 Si analizzano solo le scuole statali con caratteristica anagrafica NORMALE e
 tutte le paritarie (la cui anagrafe non ha il campo). Le righe perse nei join
 sono tracciate in results/controlli_join_<anno>.csv.
+
+Il criterio del 30% è applicato agli alunni che si stima non conoscano
+l'italiano, non all'intera cittadinanza non italiana. Come proxy si usano gli
+alunni stranieri NON nati in Italia: per ogni unità
+`alunni_non_nati_in_Italia = round_half_up(F * quota)`, con
+`quota = (100 - per100) / 100` presa per regione e ordine di scuola dalla
+distribuzione di riferimento MIM 2022/23 (colonne `*_per100` = nati in Italia
+ogni 100 alunni stranieri). Gli stranieri nati in Italia contano come italiani
+a tutti gli effetti: `alunni_nati_in_Italia = alunni_totali -
+alunni_non_nati_in_Italia`. `sopra_30`, `m_min` e derivati sono calcolati su
+questi conteggi; `alunni_italiani` / `alunni_non_italiani` restano i conteggi
+per cittadinanza.
 """
 
 from __future__ import annotations
@@ -25,6 +37,11 @@ RAW = ROOT / "data_raw"
 PROCESSED = ROOT / "data_processed"
 RESULTS = ROOT / "results"
 METADATA = ROOT / "metadata"
+REFERENCE_SHARES = (
+    ROOT
+    / "distribuzioni_di_riferimento"
+    / "alunni_cittadinanza_non_italiana_nati_in_italia_2022_2023.csv"
+)
 YEAR = "202425"
 YEAR_LABEL = "2024/25"
 THRESHOLD_NUM = 3
@@ -32,6 +49,36 @@ THRESHOLD_DEN = 10
 # Solo le statali hanno DESCRIZIONECARATTERISTICASCUOLA; le paritarie non vengono filtrate.
 CARATTERISTICA_AMMESSA = "NORMALE"
 CARATTERISTICA_NON_DISPONIBILE = "NON DISPONIBILE (PARITARIA)"
+
+# Regioni della distribuzione di riferimento -> campo REGIONE MIM.
+REFERENCE_REGIONS = {
+    "Piemonte": "PIEMONTE",
+    "Valle d'Aosta": "VALLE D'AOSTA",
+    "Lombardia": "LOMBARDIA",
+    "Trentino A.A.": "TRENTINO-ALTO ADIGE",
+    "Veneto": "VENETO",
+    "Friuli V.G.": "FRIULI-VENEZIA G.",
+    "Liguria": "LIGURIA",
+    "E. Romagna": "EMILIA ROMAGNA",
+    "Toscana": "TOSCANA",
+    "Umbria": "UMBRIA",
+    "Marche": "MARCHE",
+    "Lazio": "LAZIO",
+    "Abruzzo": "ABRUZZO",
+    "Molise": "MOLISE",
+    "Campania": "CAMPANIA",
+    "Puglia": "PUGLIA",
+    "Basilicata": "BASILICATA",
+    "Calabria": "CALABRIA",
+    "Sicilia": "SICILIA",
+    "Sardegna": "SARDEGNA",
+}
+# Colonne "nati in Italia ogni 100 alunni stranieri" -> ORDINESCUOLA MIM.
+REFERENCE_ORDERS = {
+    "primaria_per100": "SCUOLA PRIMARIA",
+    "secondaria_I_per100": "SCUOLA SECONDARIA I GRADO",
+    "secondaria_II_per100": "SCUOLA SECONDARIA II GRADO",
+}
 
 
 UNIT_FIELDS = [
@@ -57,7 +104,10 @@ UNIT_FIELDS = [
     "alunni_italiani",
     "alunni_non_italiani",
     "alunni_totali",
-    "quota_non_italiani",
+    "quota_non_nati_in_Italia_riferimento",
+    "alunni_non_nati_in_Italia",
+    "alunni_nati_in_Italia",
+    "quota_non_nati_in_Italia",
     "sopra_30",
     "m_min",
     "m_min_irrisolvibile",
@@ -84,13 +134,15 @@ AGG_FIELDS = [
     "classi_sopra_trenta",
     "studenti_totali_sopra_30",
     "studenti_non_italiani_sopra_30",
+    "studenti_non_nati_in_Italia_sopra_30",
     "m_min_sopra_30",
-    "m_min_pct_non_italiani_sopra_30",
+    "m_min_pct_non_nati_in_Italia_sopra_30",
     "m_min_pct_studenti_sopra_30",
     "m_min_con_sostituzione_legacy_sopra_30",
     "studenti_totali_analizzati",
     "studenti_non_italiani_analizzati",
-    "m_min_pct_non_italiani_analizzati",
+    "studenti_non_nati_in_Italia_analizzati",
+    "m_min_pct_non_nati_in_Italia_analizzati",
     "m_min_pct_studenti_analizzati",
     "classi_esatte_sommate",
     "unita_con_chiave_classi_esatta",
@@ -205,6 +257,33 @@ def ceil_excess_senza_sostituzione(f: int, n: int) -> tuple[int | None, bool]:
 
     denominator = THRESHOLD_DEN - THRESHOLD_NUM
     return (excess + denominator - 1) // denominator, False
+
+
+def load_non_born_in_italy_shares() -> dict[tuple[str, str], tuple[int, int]]:
+    """Quota di alunni stranieri non nati in Italia per (regione, ordine_scuola).
+
+    La quota è restituita come frazione esatta (numeratore, denominatore) per
+    arrotondare senza errori di virgola mobile: per100 ha un solo decimale.
+    """
+
+    table = read_csv(REFERENCE_SHARES)
+    shares: dict[tuple[str, str], tuple[int, int]] = {}
+    for _, row in table.iterrows():
+        name = row["regione"].strip()
+        if name == "Italia":
+            continue
+        if name not in REFERENCE_REGIONS:
+            raise ValueError(f"Regione non mappata nella distribuzione di riferimento: {name!r}")
+        for column, order in REFERENCE_ORDERS.items():
+            born_in_italy_tenths = round(float(row[column]) * 10)
+            shares[(REFERENCE_REGIONS[name], order)] = (1000 - born_in_italy_tenths, 1000)
+    return shares
+
+
+def round_half_up(numerator: int, denominator: int) -> int:
+    """Arrotonda numerator/denominator (non negativi) all'intero, 0.5 verso l'alto."""
+
+    return (2 * numerator + denominator) // (2 * denominator)
 
 
 def source_path(dataset: str, management: str) -> Path:
@@ -562,8 +641,29 @@ def load_units(
     all_units = units
     excluded = units.loc[units["motivo_esclusione"].ne("")].reset_index(drop=True)
     units = units.loc[units["motivo_esclusione"].eq("")].reset_index(drop=True)
+
+    # Solo gli stranieri non nati in Italia (proxy di chi non conosce
+    # l'italiano) contano per il 30%; quelli nati in Italia valgono come italiani.
+    shares = load_non_born_in_italy_shares()
+    share_keys = list(zip(units["regione"], units["ordine_scuola"]))
+    missing_shares = sorted(set(share_keys) - set(shares))
+    if missing_shares:
+        raise ValueError(f"Quota non nati in Italia mancante per (regione, ordine): {missing_shares}")
+    units["quota_non_nati_in_Italia_riferimento"] = [
+        f"{shares[key][0] / shares[key][1]:.3f}" for key in share_keys
+    ]
+    units["alunni_non_nati_in_Italia"] = pd.Series(
+        [
+            round_half_up(int(f) * shares[key][0], shares[key][1])
+            for f, key in zip(units["alunni_non_italiani"], share_keys)
+        ],
+        index=units.index,
+        dtype="int64",
+    )
+    units["alunni_nati_in_Italia"] = units["alunni_totali"] - units["alunni_non_nati_in_Italia"]
+
     n = units["alunni_totali"]
-    non_italiani = units["alunni_non_italiani"]
+    non_nati = units["alunni_non_nati_in_Italia"]
 
     # Per il flusso classi la chiave esatta è plesso + ordine + anno di corso.
     course_key = ["codice_scuola", "ordine_scuola", "anno_corso"]
@@ -583,19 +683,19 @@ def load_units(
     units["chiave_classi_confrontabile"] = class_match.astype("int64")
 
     # Il confronto esatto evita arrotondamenti della percentuale.
-    excess = THRESHOLD_DEN * non_italiani - THRESHOLD_NUM * n
+    excess = THRESHOLD_DEN * non_nati - THRESHOLD_NUM * n
     units["sopra_30"] = excess.gt(0).astype("int64")
     minimums = [
         ceil_excess_senza_sostituzione(int(f), int(total))
-        for f, total in zip(non_italiani, n)
+        for f, total in zip(non_nati, n)
     ]
     units["m_min"] = [minimum if not impossible else "" for minimum, impossible in minimums]
     units["m_min_irrisolvibile"] = [int(impossible) for _, impossible in minimums]
     units["m_min_con_sostituzione_legacy"] = [
-        ceil_excess_con_sostituzione(int(f), int(total)) for f, total in zip(non_italiani, n)
+        ceil_excess_con_sostituzione(int(f), int(total)) for f, total in zip(non_nati, n)
     ]
-    units["quota_non_italiani"] = [
-        f"{int(f) / int(total):.6f}" for f, total in zip(non_italiani, n)
+    units["quota_non_nati_in_Italia"] = [
+        f"{int(f) / int(total):.6f}" for f, total in zip(non_nati, n)
     ]
 
     join_rows = build_join_qc(
@@ -615,10 +715,12 @@ def load_units(
         "excluded_f_total": int(excluded["alunni_non_italiani"].sum()),
         "included_units": len(units),
         "included_n_total": int(n.sum()),
-        "included_f_total": int(non_italiani.sum()),
+        "included_f_total": int(units["alunni_non_italiani"].sum()),
+        "included_non_nati_total": int(non_nati.sum()),
         "above_30_units": len(above),
         "above_30_n_total": int(above["alunni_totali"].sum()),
         "above_30_f_total": int(above["alunni_non_italiani"].sum()),
+        "above_30_non_nati_total": int(above["alunni_non_nati_in_Italia"].sum()),
         "above_30_m_min_total": numeric_sum(above["m_min"]),
         "above_30_m_min_con_sostituzione_total": int(
             above["m_min_con_sostituzione_legacy"].sum()
@@ -662,6 +764,7 @@ def aggregate_rows(
     work["_classi_sopra_30"] = work["_classi_per_unita"] * flagged
     work["_studenti_totali_sopra_30"] = work["alunni_totali"] * flagged
     work["_studenti_non_italiani_sopra_30"] = work["alunni_non_italiani"] * flagged
+    work["_studenti_non_nati_in_Italia_sopra_30"] = work["alunni_non_nati_in_Italia"] * flagged
     work["_m_min_sopra_30"] = pd.to_numeric(work["m_min"], errors="coerce").fillna(0) * flagged
     work["_m_min_legacy_sopra_30"] = work["m_min_con_sostituzione_legacy"] * flagged
     work["_classi_esatte"] = pd.to_numeric(work["classi_esatte"], errors="coerce").fillna(0)
@@ -678,10 +781,12 @@ def aggregate_rows(
         classi_sopra_trenta=("_classi_sopra_30", "sum"),
         studenti_totali_sopra_30=("_studenti_totali_sopra_30", "sum"),
         studenti_non_italiani_sopra_30=("_studenti_non_italiani_sopra_30", "sum"),
+        studenti_non_nati_in_Italia_sopra_30=("_studenti_non_nati_in_Italia_sopra_30", "sum"),
         m_min_sopra_30=("_m_min_sopra_30", "sum"),
         m_min_con_sostituzione_legacy_sopra_30=("_m_min_legacy_sopra_30", "sum"),
         studenti_totali_analizzati=("alunni_totali", "sum"),
         studenti_non_italiani_analizzati=("alunni_non_italiani", "sum"),
+        studenti_non_nati_in_Italia_analizzati=("alunni_non_nati_in_Italia", "sum"),
         classi_esatte_sommate=("_classi_esatte", "sum"),
         unita_con_chiave_classi_esatta=("chiave_classi_confrontabile", "sum"),
     ).reset_index()
@@ -709,26 +814,28 @@ def aggregate_rows(
         "classi_sopra_trenta",
         "studenti_totali_sopra_30",
         "studenti_non_italiani_sopra_30",
+        "studenti_non_nati_in_Italia_sopra_30",
         "m_min_sopra_30",
         "m_min_con_sostituzione_legacy_sopra_30",
         "studenti_totali_analizzati",
         "studenti_non_italiani_analizzati",
+        "studenti_non_nati_in_Italia_analizzati",
         "classi_esatte_sommate",
         "unita_con_chiave_classi_esatta",
     ]:
         result[field] = grouped[field].astype("int64")
 
     above_m = result["m_min_sopra_30"]
-    result["m_min_pct_non_italiani_sopra_30"] = [
+    result["m_min_pct_non_nati_in_Italia_sopra_30"] = [
         pct(int(m), int(f))
-        for m, f in zip(above_m, result["studenti_non_italiani_sopra_30"])
+        for m, f in zip(above_m, result["studenti_non_nati_in_Italia_sopra_30"])
     ]
     result["m_min_pct_studenti_sopra_30"] = [
         pct(int(m), int(n)) for m, n in zip(above_m, result["studenti_totali_sopra_30"])
     ]
-    result["m_min_pct_non_italiani_analizzati"] = [
+    result["m_min_pct_non_nati_in_Italia_analizzati"] = [
         pct(int(m), int(f))
-        for m, f in zip(above_m, result["studenti_non_italiani_analizzati"])
+        for m, f in zip(above_m, result["studenti_non_nati_in_Italia_analizzati"])
     ]
     result["m_min_pct_studenti_analizzati"] = [
         pct(int(m), int(n)) for m, n in zip(above_m, result["studenti_totali_analizzati"])
@@ -820,9 +927,19 @@ def build_qc(
                     "N base dell'analisi; le metriche seguenti sono calcolate solo sulle unità incluse.",
                 ),
                 make_qc_row("non_italiani_inclusi", diag["included_f_total"], management),
+                make_qc_row(
+                    "non_nati_in_Italia_inclusi",
+                    diag["included_non_nati_total"],
+                    management,
+                    "Stima: non italiani x quota regionale per ordine di non nati in Italia "
+                    "(riferimento MIM 2022/23), arrotondata per unità. Base del criterio del 30%.",
+                ),
                 make_qc_row("unità_sopra_30", diag["above_30_units"], management),
                 make_qc_row("studenti_in_unità_sopra_30", diag["above_30_n_total"], management),
                 make_qc_row("non_italiani_in_unità_sopra_30", diag["above_30_f_total"], management),
+                make_qc_row(
+                    "non_nati_in_Italia_in_unità_sopra_30", diag["above_30_non_nati_total"], management
+                ),
                 make_qc_row(
                     "m_min_in_unità_sopra_30",
                     diag["above_30_m_min_total"],
@@ -954,8 +1071,11 @@ def main() -> None:
     )
     all_units["_ordine_ordinato"] = range(len(all_units))
 
+    #SOLO CON UNITA >= 10 STUDENTI
+    all_units = all_units[all_units['alunni_totali']>=10]
+
     flagged = all_units.loc[all_units["sopra_30"].eq(1)].copy()
-    flagged["_quota_sort"] = pd.to_numeric(flagged["quota_non_italiani"])
+    flagged["_quota_sort"] = pd.to_numeric(flagged["quota_non_nati_in_Italia"])
     flagged["_m_min_sort"] = [
         -int(value) if value != "" else 1 for value in flagged["m_min"]
     ]
@@ -968,9 +1088,6 @@ def main() -> None:
         .drop(columns=["_quota_sort", "_m_min_sort"])
         .reset_index(drop=True)
     )
-
-    #SOLO CON UNITA >= 10 STUDENTI
-    all_units = all_units[all_units['alunni_totali']>=10]
 
     write_csv(PROCESSED / f"unita_{YEAR}.csv", all_units, UNIT_FIELDS)
     write_csv(PROCESSED / f"unita_sopra_30_{YEAR}.csv", flagged, UNIT_FIELDS)
@@ -992,7 +1109,9 @@ def main() -> None:
         "generated_on": date.today().isoformat(),
         "school_year": YEAR_LABEL,
         "threshold": 0.30,
-        "formula": "M_min = ceil(max(0, 10F - 3N) / 7); spostamento SENZA sostituzione, N diminuisce di M_min",
+        "formula": "M_min = ceil(max(0, 10F - 3N) / 7), con F = alunni non nati in Italia; spostamento SENZA sostituzione, N diminuisce di M_min",
+        "definizione_F": "alunni_non_nati_in_Italia = round_half_up(alunni_non_italiani * (100 - per100_nati_in_Italia) / 100), per regione e ordine di scuola; gli stranieri nati in Italia contano come italiani",
+        "fonte_quote_non_nati_in_Italia": str(REFERENCE_SHARES.relative_to(ROOT)),
         "formula_con_sostituzione_legacy": "M_min_legacy = max(0, ceil(F - 0.30*N)); assume sostituzione 1:1, N costante (formula originaria, sottostima gli spostamenti reali)",
         "unit_key": ["tipo_gestione", "CODICESCUOLA", "ORDINESCUOLA", "ANNOCORSO"],
         "filter": f"statali: DESCRIZIONECARATTERISTICASCUOLA == '{CARATTERISTICA_AMMESSA}'; paritarie: nessun filtro (campo assente); escluse le unità senza anagrafe",
@@ -1003,8 +1122,12 @@ def main() -> None:
         "units_above_30_irrisolvibili": int(flagged["m_min_irrisolvibile"].sum()),
         "students": int(all_units["alunni_totali"].sum()),
         "non_italian_students": int(all_units["alunni_non_italiani"].sum()),
+        "students_non_nati_in_Italia": int(all_units["alunni_non_nati_in_Italia"].sum()),
         "students_in_units_above_30": int(flagged["alunni_totali"].sum()),
         "non_italian_students_in_units_above_30": int(flagged["alunni_non_italiani"].sum()),
+        "students_non_nati_in_Italia_in_units_above_30": int(
+            flagged["alunni_non_nati_in_Italia"].sum()
+        ),
         "m_min_in_units_above_30": numeric_sum(flagged["m_min"]),
         "m_min_con_sostituzione_legacy_in_units_above_30": int(
             flagged["m_min_con_sostituzione_legacy"].sum()

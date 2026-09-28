@@ -81,7 +81,6 @@ def replay_args(run: dict[str, object]) -> argparse.Namespace:
         applied_max_km = float(applied_max_km)
     capienza = run.get("capienza_percentile")
     return argparse.Namespace(
-        quota_campione=float(run["quota_campione"]),
         seed=int(run["seed"]),
         capienza_percentile=float(capienza) if capienza is not None else 95.0,
         consenti_cambio_gestione=bool(run.get("consenti_cambio_gestione", False)),
@@ -140,7 +139,7 @@ def main() -> None:
             if replayed_max is not None and round(float(replayed_max), 3) != round(run_max, 3):
                 print(
                     "ATTENZIONE: il massimo ricostruito non coincide con il JSON "
-                    f"per quota={run_args.quota_campione:g}, seed={run_args.seed}: "
+                    f"per seed={run_args.seed}: "
                     f"{replayed_max} km contro {run_max} km.",
                     file=sys.stderr,
                 )
@@ -165,7 +164,7 @@ def main() -> None:
                     }
                 )
             print(
-                f"Run quota={run_args.quota_campione:g}, seed={run_args.seed}: "
+                f"Run seed={run_args.seed}: "
                 f"max {run_max:g} km, ricostruito {replayed_max if replayed_max is not None else 'n/d'} km.",
                 flush=True,
             )

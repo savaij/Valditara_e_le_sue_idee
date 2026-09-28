@@ -4,10 +4,12 @@
 Per ogni comune (anno_corso == 1) e per ogni combinazione (ordine_scuola,
 tipo_scuola_anagrafe) si confronta il numero minimo di studenti da spostare
 (`m_min`) con la disponibilità effettiva delle unità dello stesso comune, cioè
-il minimo tra i posti fisici liberi e gli alunni non italiani che l'unità può
-ancora accogliere restando sotto il 30%. Se gli studenti da spostare superano
-la disponibilità, il gruppo ha un deficit di posti interni al comune,
-date le ipotesi del modello. Non si verifica la disponibilità fuori comune.
+il minimo tra i posti fisici liberi e gli alunni non nati in Italia che
+l'unità può ancora accogliere restando sotto il 30% (stessa proxy usata da
+analyze.py e simulate_realloc.py per il criterio del 30%). Se gli studenti da
+spostare superano la disponibilità, il gruppo ha un deficit di posti interni
+al comune, date le ipotesi del modello. Non si verifica la disponibilità
+fuori comune.
 
 Con `--consenti-cambio-tipo-scuola` il vincolo su `tipo_scuola_anagrafe` viene
 ignorato: il confronto si fa solo per (comune, ordine_scuola).
@@ -36,10 +38,12 @@ def carica_unita() -> pd.DataFrame:
     df = df[df["m_min_irrisolvibile"] == 0].copy()
     df["rimanenza"] = (df["capienza"] - df["alunni_totali"]).clip(lower=0)
 
-    # Massimo intero x tale che (F + x) / (N + x) <= 3/10.
+    # Massimo intero x tale che (F + x) / (N + x) <= 3/10, con F = alunni non
+    # nati in Italia (proxy di chi non conosce l'italiano; gli stranieri nati
+    # in Italia contano come italiani, come in analyze.py/simulate_realloc.py).
     # Il floor è necessario: arrotondare al più vicino può superare la soglia.
     df["disponibilita_stranieri"] = (
-        (3 * df["alunni_totali"] - 10 * df["alunni_non_italiani"]) // 7
+        (3 * df["alunni_totali"] - 10 * df["alunni_non_nati_in_Italia"]) // 7
     )
 
     # I due vincoli valgono contemporaneamente. Le unità già sopra soglia
