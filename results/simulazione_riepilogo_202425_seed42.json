@@ -1,0 +1,183 @@
+{
+  "generated_on": "2026-09-28",
+  "school_year": "2024/25",
+  "seed": 42,
+  "capienza_percentile": null,
+  "max_limit_per_class": 30,
+  "consenti_cambio_gestione": false,
+  "consenti_cambio_tipologia_scuola": true,
+  "ordine_origine_casuale": false,
+  "max_km_applicato": 5.0,
+  "nota_competenza_linguistica": "Nessun campionamento: si riallocano tutti gli m_min di analyze.py, calcolati sugli alunni stranieri non nati in Italia (quota regionale per ordine di scuola, riferimento MIM 2022/23) come proxy di chi non conosce l'italiano; gli stranieri nati in Italia contano come italiani. Stima, non misura osservata.",
+  "alunni_italiani_totale": 1275967,
+  "alunni_non_italiani_totale": 191202,
+  "alunni_nati_in_Italia_totale": 1393600,
+  "alunni_non_nati_in_Italia_totale": 73569,
+  "unita_sopra_30_totali": 50,
+  "classi_sopra_30_totali": 67,
+  "unita_sopra_30_irrisolvibili_escluse": 0,
+  "unita_destinazione_candidate": 25368,
+  "studenti_da_riallocare_totale": 150,
+  "studenti_riallocati_totale": 78,
+  "studenti_non_riallocati_totale": 72,
+  "quota_riallocati_su_da_riallocare": 0.52,
+  "distanza_km": {
+    "n": 78,
+    "media_km": 1.808,
+    "mediana_km": 1.067,
+    "p90_km": 4.305,
+    "p95_km": 4.805,
+    "max_km": 4.844,
+    "min_km": 0.0
+  },
+  "distanza_km_per_ordine_scuola": {
+    "SCUOLA PRIMARIA": {
+      "n": 41,
+      "media_km": 2.342,
+      "mediana_km": 1.756,
+      "p90_km": 4.805,
+      "p95_km": 4.844,
+      "max_km": 4.844,
+      "min_km": 0.0
+    },
+    "SCUOLA SECONDARIA I GRADO": {
+      "n": 14,
+      "media_km": 2.603,
+      "mediana_km": 3.758,
+      "p90_km": 3.991,
+      "p95_km": 4.091,
+      "max_km": 4.091,
+      "min_km": 0.0
+    },
+    "SCUOLA SECONDARIA II GRADO": {
+      "n": 23,
+      "media_km": 0.372,
+      "mediana_km": 0.046,
+      "p90_km": 1.067,
+      "p95_km": 1.067,
+      "max_km": 1.253,
+      "min_km": 0.0
+    }
+  },
+  "distanza_km_per_regione": {
+    "BASILICATA": {
+      "n": 6,
+      "media_km": 1.067,
+      "mediana_km": 1.067,
+      "p90_km": 1.067,
+      "p95_km": 1.067,
+      "max_km": 1.067,
+      "min_km": 1.067
+    },
+    "CALABRIA": {
+      "n": 2,
+      "media_km": 1.445,
+      "mediana_km": 1.445,
+      "p90_km": 1.445,
+      "p95_km": 1.445,
+      "max_km": 1.445,
+      "min_km": 1.445
+    },
+    "CAMPANIA": {
+      "n": 43,
+      "media_km": 2.752,
+      "mediana_km": 3.758,
+      "p90_km": 4.805,
+      "p95_km": 4.84,
+      "max_km": 4.844,
+      "min_km": 0.0
+    },
+    "EMILIA ROMAGNA": {
+      "n": 1,
+      "media_km": 0.0,
+      "mediana_km": 0.0,
+      "p90_km": 0.0,
+      "p95_km": 0.0,
+      "max_km": 0.0,
+      "min_km": 0.0
+    },
+    "LOMBARDIA": {
+      "n": 5,
+      "media_km": 1.637,
+      "mediana_km": 0.0,
+      "p90_km": 4.091,
+      "p95_km": 4.091,
+      "max_km": 4.091,
+      "min_km": 0.0
+    },
+    "MARCHE": {
+      "n": 7,
+      "media_km": 0.25,
+      "mediana_km": 0.046,
+      "p90_km": 0.75,
+      "p95_km": 0.849,
+      "max_km": 0.949,
+      "min_km": 0.0
+    },
+    "MOLISE": {
+      "n": 1,
+      "media_km": 0.0,
+      "mediana_km": 0.0,
+      "p90_km": 0.0,
+      "p95_km": 0.0,
+      "max_km": 0.0,
+      "min_km": 0.0
+    },
+    "PUGLIA": {
+      "n": 3,
+      "media_km": 0.0,
+      "mediana_km": 0.0,
+      "p90_km": 0.0,
+      "p95_km": 0.0,
+      "max_km": 0.0,
+      "min_km": 0.0
+    },
+    "SICILIA": {
+      "n": 8,
+      "media_km": 0.347,
+      "mediana_km": 0.388,
+      "p90_km": 0.501,
+      "p95_km": 0.501,
+      "max_km": 0.501,
+      "min_km": 0.0
+    },
+    "TOSCANA": {
+      "n": 1,
+      "media_km": 0.437,
+      "mediana_km": 0.437,
+      "p90_km": 0.437,
+      "p95_km": 0.437,
+      "max_km": 0.437,
+      "min_km": 0.437
+    },
+    "VENETO": {
+      "n": 1,
+      "media_km": 0.277,
+      "mediana_km": 0.277,
+      "p90_km": 0.277,
+      "p95_km": 0.277,
+      "max_km": 0.277,
+      "min_km": 0.277
+    }
+  },
+  "controlli_qualita": {
+    "unita_sopra_30_totali": 50,
+    "classi_sopra_30_totali": 67,
+    "unita_sopra_30_irrisolvibili_escluse": 0,
+    "unita_destinazione_candidate": 25368,
+    "unita_destinazione_escluse_senza_classi_esatte": 0,
+    "studenti_da_riallocare_totale": 150,
+    "studenti_riallocati_totale": 78,
+    "studenti_non_riallocati_totale": 72,
+    "violazioni_soglia_30_in_destinazioni": 0,
+    "violazioni_capacita_in_destinazioni": 0,
+    "violazioni_tipologia_scuola_in_destinazioni": 0,
+    "unita_origine_con_bilancio_incoerente": 0,
+    "capienza_percentile_usato": "nessuno",
+    "max_limit_per_class_usato": 30,
+    "cambio_gestione_consentito": 0,
+    "cluster_tipologia_scuola_applicato": 0,
+    "ordine_origine_casuale": 0,
+    "max_km_applicato": 5.0
+  }
+}
