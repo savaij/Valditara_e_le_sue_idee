@@ -30,8 +30,8 @@ MINIMO_ALUNNI = 10
 
 
 def carica_unita() -> pd.DataFrame:
-    df = pd.read_csv(INPUT)
-    df = df[df['alunni_totali']>9]
+    df = pd.read_csv(INPUT, low_memory=False)
+    df = df[df["alunni_totali"] >= MINIMO_ALUNNI].copy()
     df.loc[df["classi_esatte"].isna(), "classi_esatte"] = 1
     df["capienza"] = df["classi_esatte"] * ALUNNI_PER_CLASSE
     # escludiamo classi solo stranieri

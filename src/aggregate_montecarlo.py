@@ -127,9 +127,9 @@ def main() -> None:
             seed=seed,
             capienza_percentile=95.0,
             consenti_cambio_gestione=False,
-            consenti_cambio_tipologia_scuola=False,
+            consenti_cambio_tipologia_scuola=True,
             ordine_origine_casuale=args.ordine_origine_casuale,
-            max_km=None,
+            max_km=5.0,
         )
         runs.append(
             simulate_realloc.run_simulation(sim_args, write_outputs=False, print_summary=False)
@@ -150,6 +150,8 @@ def main() -> None:
         "seed_finale": last_seed,
         "ordine_origine_casuale": args.ordine_origine_casuale,
         "max_limit_per_class": simulate_realloc.MAX_LIMIT_PER_CLASS,
+        "max_km_applicato": 5.0,
+        "consenti_cambio_tipologia_scuola": True,
         "runs": runs,
     }
     summary = {
@@ -160,6 +162,8 @@ def main() -> None:
         "seed_finale": last_seed,
         "ordine_origine_casuale": args.ordine_origine_casuale,
         "max_limit_per_class": simulate_realloc.MAX_LIMIT_PER_CLASS,
+        "max_km_applicato": 5.0,
+        "consenti_cambio_tipologia_scuola": True,
         "nota": (
             "Media, deviazione standard campionaria, minimo e massimo delle metriche per seed. "
             "Ogni run rialloca esattamente m_min per ciascuna unità sopra soglia (nessun "

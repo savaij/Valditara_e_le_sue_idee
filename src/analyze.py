@@ -46,6 +46,7 @@ YEAR = "202425"
 YEAR_LABEL = "2024/25"
 THRESHOLD_NUM = 3
 THRESHOLD_DEN = 10
+MINIMO_ALUNNI = 10
 # Solo le statali hanno DESCRIZIONECARATTERISTICASCUOLA; le paritarie non vengono filtrate.
 CARATTERISTICA_AMMESSA = "NORMALE"
 CARATTERISTICA_NON_DISPONIBILE = "NON DISPONIBILE (PARITARIA)"
@@ -905,6 +906,9 @@ def build_qc(
     qc: list[dict[str, object]] = []
     for diag in diagnostics:
         management = str(diag["management"])
+        analysed = units.loc[units["tipo_gestione"].eq(management)]
+        above = analysed.loc[analysed["sopra_30"].eq(1)]
+        exact = analysed.loc[analysed["chiave_classi_confrontabile"].eq(1)]
         qc.extend(
             [
                 make_qc_row("righe_studenti_cittadinanza", diag["citizenship_rows"], management),
@@ -919,42 +923,43 @@ def build_qc(
                 ),
                 make_qc_row("studenti_esclusi", diag["excluded_n_total"], management),
                 make_qc_row("non_italiani_esclusi", diag["excluded_f_total"], management),
-                make_qc_row("unità_incluse", diag["included_units"], management),
+                make_qc_row("unità_escluse_sotto_10", int(diag["included_units"]) - len(analysed), management),
+                make_qc_row("unità_incluse", len(analysed), management),
                 make_qc_row(
                     "studenti_inclusi",
-                    diag["included_n_total"],
+                    int(analysed["alunni_totali"].sum()),
                     management,
-                    "N base dell'analisi; le metriche seguenti sono calcolate solo sulle unità incluse.",
+                    "N base dell'analisi dopo il filtro alunni_totali >= 10.",
                 ),
-                make_qc_row("non_italiani_inclusi", diag["included_f_total"], management),
+                make_qc_row("non_italiani_inclusi", int(analysed["alunni_non_italiani"].sum()), management),
                 make_qc_row(
                     "non_nati_in_Italia_inclusi",
-                    diag["included_non_nati_total"],
+                    int(analysed["alunni_non_nati_in_Italia"].sum()),
                     management,
                     "Stima: non italiani x quota regionale per ordine di non nati in Italia "
                     "(riferimento MIM 2022/23), arrotondata per unità. Base del criterio del 30%.",
                 ),
-                make_qc_row("unità_sopra_30", diag["above_30_units"], management),
-                make_qc_row("studenti_in_unità_sopra_30", diag["above_30_n_total"], management),
-                make_qc_row("non_italiani_in_unità_sopra_30", diag["above_30_f_total"], management),
+                make_qc_row("unità_sopra_30", len(above), management),
+                make_qc_row("studenti_in_unità_sopra_30", int(above["alunni_totali"].sum()), management),
+                make_qc_row("non_italiani_in_unità_sopra_30", int(above["alunni_non_italiani"].sum()), management),
                 make_qc_row(
-                    "non_nati_in_Italia_in_unità_sopra_30", diag["above_30_non_nati_total"], management
+                    "non_nati_in_Italia_in_unità_sopra_30", int(above["alunni_non_nati_in_Italia"].sum()), management
                 ),
                 make_qc_row(
                     "m_min_in_unità_sopra_30",
-                    diag["above_30_m_min_total"],
+                    numeric_sum(above["m_min"]),
                     management,
                     "Formula senza sostituzione (N diminuisce); esclude le unità irrisolvibili.",
                 ),
                 make_qc_row(
                     "m_min_con_sostituzione_legacy_in_unità_sopra_30",
-                    diag["above_30_m_min_con_sostituzione_total"],
+                    int(above["m_min_con_sostituzione_legacy"].sum()),
                     management,
                     "Formula originaria del repository (N costante, sostituzione 1:1); sottostima il numero di spostamenti se gli studenti non vengono sostituiti.",
                 ),
                 make_qc_row(
                     "unità_sopra_30_irrisolvibili",
-                    diag["above_30_irrisolvibili"],
+                    int(above["m_min_irrisolvibile"].sum()),
                     management,
                     "Unità con zero alunni italiani (N=F): la sola rimozione di alunni non italiani non può mai portarle sotto il 30%.",
                 ),
@@ -963,10 +968,10 @@ def build_qc(
                 make_qc_row("classi_totali", diag["classes_total"], management),
                 make_qc_row("righe_classi_con_anno_7_pluriclasse", diag["class_course_7_rows"], management),
                 make_qc_row("chiavi_classi_duplicate_scartate", diag["class_duplicate_keys"], management),
-                make_qc_row("unità_con_chiave_classi_esatta", diag["class_exact_matches"], management),
-                make_qc_row("unità_senza_chiave_classi_esatta", diag["class_missing_exact"], management),
-                make_qc_row("unità_con_delta_N_nonzero", diag["class_delta_nonzero"], management),
-                make_qc_row("somma_delta_N_cittadinanza_meno_classi", diag["class_delta_sum"], management),
+                make_qc_row("unità_con_chiave_classi_esatta", len(exact), management),
+                make_qc_row("unità_senza_chiave_classi_esatta", len(analysed) - len(exact), management),
+                make_qc_row("unità_con_delta_N_nonzero", int(pd.to_numeric(exact["delta_n_cittadinanza_meno_classi"]).ne(0).sum()), management),
+                make_qc_row("somma_delta_N_cittadinanza_meno_classi", numeric_sum(exact["delta_n_cittadinanza_meno_classi"]), management),
                 make_qc_row("unità_senza_anagrafica", diag["registry_missing_units"], management),
                 make_qc_row("righe_anagrafe_standard", diag["registry_standard_rows"], management),
                 make_qc_row("righe_anagrafe_autonome", diag["registry_autonomous_rows"], management),
@@ -992,13 +997,13 @@ def build_qc(
                 "studenti_totali_inclusi",
                 int(units["alunni_totali"].sum()),
                 "tutte",
-                "N base dell'analisi.",
+                "N base dell'analisi dopo il filtro alunni_totali >= 10.",
             ),
             make_qc_row(
                 "studenti_totali_classi_solo_chiavi_esatte",
                 numeric_sum(units["alunni_classi_esatte"]),
                 "tutte",
-                "Solo unità incluse; non è un confronto completo perché l'anno classe 7 non è joinabile al corso.",
+                "Solo unità con almeno 10 alunni; non è un confronto completo perché l'anno classe 7 non è joinabile al corso.",
             ),
         ]
     )
@@ -1071,8 +1076,9 @@ def main() -> None:
     )
     all_units["_ordine_ordinato"] = range(len(all_units))
 
-    #SOLO CON UNITA >= 10 STUDENTI
-    all_units = all_units[all_units['alunni_totali']>=10]
+    # Da qui in poi ogni risultato analitico usa lo stesso perimetro.
+    units_before_minimum = all_units
+    all_units = all_units.loc[all_units["alunni_totali"].ge(MINIMO_ALUNNI)].copy()
 
     flagged = all_units.loc[all_units["sopra_30"].eq(1)].copy()
     flagged["_quota_sort"] = pd.to_numeric(flagged["quota_non_nati_in_Italia"])
@@ -1114,9 +1120,11 @@ def main() -> None:
         "fonte_quote_non_nati_in_Italia": str(REFERENCE_SHARES.relative_to(ROOT)),
         "formula_con_sostituzione_legacy": "M_min_legacy = max(0, ceil(F - 0.30*N)); assume sostituzione 1:1, N costante (formula originaria, sottostima gli spostamenti reali)",
         "unit_key": ["tipo_gestione", "CODICESCUOLA", "ORDINESCUOLA", "ANNOCORSO"],
-        "filter": f"statali: DESCRIZIONECARATTERISTICASCUOLA == '{CARATTERISTICA_AMMESSA}'; paritarie: nessun filtro (campo assente); escluse le unità senza anagrafe",
+        "filter": f"alunni_totali >= {MINIMO_ALUNNI}; statali: DESCRIZIONECARATTERISTICASCUOLA == '{CARATTERISTICA_AMMESSA}'; paritarie: nessun filtro (campo assente); escluse le unità senza anagrafe",
         "units_excluded": len(excluded_units),
         "students_excluded": int(excluded_units["alunni_totali"].sum()),
+        "units_excluded_below_10": len(units_before_minimum) - len(all_units),
+        "students_excluded_below_10": int(units_before_minimum["alunni_totali"].sum() - all_units["alunni_totali"].sum()),
         "units": len(all_units),
         "units_above_30": len(flagged),
         "units_above_30_irrisolvibili": int(flagged["m_min_irrisolvibile"].sum()),

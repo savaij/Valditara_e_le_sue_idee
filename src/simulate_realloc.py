@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 """Simulazione realistica degli spostamenti per il criterio del 30% - MIM 2024/25.
 
-Estende `analyze.py`: quello script calcola solo un limite inferiore aritmetico
+Estende `analyze.py`: quello script calcola un minimo aritmetico condizionato
 (`m_min`, senza sostituzione) per ciascuna unità sopra soglia. Questo script
 tenta di collocare concretamente quegli studenti in unità riceventi realmente
-equivalenti, rispettandone capacità e soglia del 30%, e misura la distanza
-geografica implicata.
+compatibili, rispettandone capacità e soglia del 30%, entro 5 km in linea
+d'aria fra plessi, e misura la distanza geografica implicata.
 
-Dipendenze: libreria standard + numpy (solo per questo script; `analyze.py`
-resta stdlib-only). numpy è usato per RNG riproducibile e calcolo vettoriale
-delle distanze.
+Dipendenze: libreria standard + numpy. `analyze.py` richiede pandas.
+numpy è usato per RNG riproducibile e calcolo vettoriale delle distanze.
 
 ## Definizione di "unità equivalente" (destinazione candidata)
 
@@ -26,24 +25,23 @@ considerata equivalente se e solo se:
 - stesso `anno_corso` (stesso anno di corso, non genericamente lo stesso
   ordine): per continuità didattica un alunno di classe 3 non può essere
   inserito in una classe 4.
-- stesso "cluster" di tipologia/indirizzo scolastico (es. liceo scientifico,
-  istituto tecnico commerciale, alberghiero...), derivato dalla colonna
-  anagrafica `DESCRIZIONETIPOLOGIAGRADOISTRUZIONESCUOLA` (campo
+- per default NON si impone lo stesso "cluster" di tipologia/indirizzo
+  scolastico. Con `--vincola-tipologia-scuola` si attiva il vincolo derivato
+  dalla colonna anagrafica `DESCRIZIONETIPOLOGIAGRADOISTRUZIONESCUOLA` (campo
   `tipo_scuola_anagrafe` in `unita_202425.csv`) tramite la tabella
   `SCHOOL_TYPE_CLUSTERS` sotto. Se il valore anagrafico di una delle due unità
   (origine o destinazione) ricade in una categoria troppo generica per essere
   informativa (istituti comprensivi, convitti, o un valore non mappato) il
   vincolo di tipologia non si applica per quell'unità: resta solo il vincolo
-  di `ordine_scuola`. Disattivabile con `--consenti-cambio-tipologia-scuola`
-  come verifica di sensitività, non di default.
+  di `ordine_scuola`.
 - codice_scuola diverso dall'origine (per costruzione le unità sopra soglia
   non possono comparire anche come destinazione, perché la destinazione deve
   avere p <= 0.30; vedi sotto).
 
 LIMITE IMPORTANTE: il flusso MIM usato (ALUCORSOINDCLA / ALUITASTRACIT) non
 contiene l'indirizzo di studio (es. liceo scientifico vs istituto tecnico
-economico) per la secondaria di II grado. Questo limite è ora in parte
-mitigato dal vincolo di tipologia sopra, che usa il valore anagrafico
+economico) per la secondaria di II grado. In uno scenario alternativo, questo
+limite è in parte mitigato dal vincolo di tipologia, che usa il valore anagrafico
 (`DESCRIZIONETIPOLOGIAGRADOISTRUZIONESCUOLA`), disponibile per il 100% delle
 unità nei dati attuali. Resta però un limite residuo noto: per le scuole
 paritarie il valore anagrafico della secondaria II grado è spesso generico
@@ -55,14 +53,12 @@ dei dati disponibili, non un'omissione di modellazione.
 
 ## Capacità delle sedi riceventi
 
-Non esiste nei dati un campo di capienza massima. Si stima una capienza per
-classe empirica come percentile (default: 95°) della distribuzione nazionale
-di alunni/classi osservata per ciascuna coppia (tipo_gestione, ordine_scuola),
-tra le unità con chiave classi/studenti confrontabile. La capienza stimata di
-un'unità è `classi_esatte * capienza_classe_stimata`; i posti fisici
-disponibili sono `max(0, capienza stimata - alunni_totali)`. Se
-`classi_esatte` è vuoto, per la simulazione viene imputato il valore 1. Le
-unità con meno di `MINIMO_ALUNNI` alunni totali sono escluse dall'analisi.
+Non esiste nei dati un campo di capienza massima. Per default si ipotizzano
+30 posti per classe: `capienza = classi_esatte * 30`, con disponibilità
+`max(0, capienza - alunni_totali)`. Se `classi_esatte` è vuoto, si imputa
+una classe. Le unità con meno di `MINIMO_ALUNNI` alunni totali sono escluse.
+Ponendo `MAX_LIMIT_PER_CLASS = None` si può usare invece un percentile
+empirico, ma non è lo scenario corrente.
 
 Una destinazione può inoltre ricevere al più
 `floor((3*N - 10*F) / 7)` alunni non nati in Italia aggiuntivi (F = suoi
@@ -96,8 +92,8 @@ Per ciascun gruppo (tipo_gestione, ordine_scuola, anno_corso):
    quando più origini competono per le stesse destinazioni;
 2. per ciascuna unità di origine, si cercano le destinazioni con posti
    disponibili più vicine (ricerca a griglia con anelli crescenti, filtrando
-   per compatibilità del cluster di tipologia scolastica oltre che per
-   capacità residua, poi distanza geodetica esatta - formula haversine,
+   per capacità residua ed eventualmente per cluster di tipologia, poi
+   distanza geodetica esatta - formula haversine,
    coordinate dal file di geocoding), assegnando gli studenti alle
    destinazioni più vicine finché `m_min` è soddisfatto o la
    capacità del gruppo è esaurita (in tal caso il residuo è "non
@@ -548,18 +544,20 @@ def parse_args() -> argparse.Namespace:
                          help="Percentile empirico usato come capienza massima per classe (default 95).")
     parser.add_argument("--consenti-cambio-gestione", action="store_true",
                          help="Permette destinazioni con tipo_gestione diverso dall'origine (default: no).")
-    parser.add_argument("--consenti-cambio-tipologia-scuola", action="store_true",
+    parser.add_argument("--consenti-cambio-tipologia-scuola", action="store_true", default=True,
                          help="Disattiva il vincolo di cluster di tipologia/indirizzo scolastico "
                               "(derivato da DESCRIZIONETIPOLOGIAGRADOISTRUZIONESCUOLA); solo ordine_scuola "
-                              "resta vincolante (default: no).")
+                              "resta vincolante (default: sì).")
+    parser.add_argument("--vincola-tipologia-scuola", action="store_false",
+                        dest="consenti_cambio_tipologia_scuola",
+                        help="Scenario alternativo: richiede cluster di tipologia compatibili.")
     parser.add_argument("--ordine-origine-casuale", action="store_true",
                          help="Processa le unità di origine di ciascun gruppo in un ordine casuale "
                               "(permutazione via seed) invece dell'euristica per severità decrescente. "
                               "Usato per la simulazione Monte Carlo sulla sensibilità del flusso greedy "
                               "all'ordine di elaborazione (default: no, ordine deterministico).")
-    parser.add_argument("--max-km", type=float, default=None,
-                         help="Se impostato, oltre questa distanza (km) lo spostamento è considerato non realistico "
-                              "e il residuo viene marcato non riallocabile invece di essere assegnato.")
+    parser.add_argument("--max-km", type=float, default=5.0,
+                         help="Distanza massima in linea d'aria tra plessi (default: 5 km).")
     return parser.parse_args()
 
 

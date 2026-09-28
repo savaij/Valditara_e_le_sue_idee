@@ -4,6 +4,8 @@ set -euo pipefail
 # Esegue la simulazione realistica degli spostamenti per il criterio del 30%.
 # Richiede che analyze.py abbia già prodotto data_processed/unita_202425.csv.
 # Ogni unità sopra soglia rialloca esattamente m_min (nessun campionamento).
+# Entrambe le modalità usano 5 km in linea d'aria, capienza 30 per classe e
+# non vincolano la tipologia anagrafica (parametri dello scenario consegnato).
 #
 # Due modalità d'uso:
 #

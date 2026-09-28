@@ -12,9 +12,11 @@
     "ORDINESCUOLA",
     "ANNOCORSO"
   ],
-  "filter": "statali: DESCRIZIONECARATTERISTICASCUOLA == 'NORMALE'; paritarie: nessun filtro (campo assente); escluse le unità senza anagrafe",
+  "filter": "alunni_totali >= 10; statali: DESCRIZIONECARATTERISTICASCUOLA == 'NORMALE'; paritarie: nessun filtro (campo assente); escluse le unità senza anagrafe",
   "units_excluded": 6128,
   "students_excluded": 191819,
+  "units_excluded_below_10": 13202,
+  "students_excluded_below_10": 73710,
   "units": 115454,
   "units_above_30": 150,
   "units_above_30_irrisolvibili": 0,

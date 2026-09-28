@@ -5,26 +5,27 @@ anno_scolastico,metrica,tipo_gestione,valore,nota
 202425,unità_escluse,statale,6128,Anagrafe mancante o caratteristica diversa da NORMALE (solo statali). Dettaglio in controlli_join_202425.csv e unita_escluse_202425.csv.
 202425,studenti_esclusi,statale,191819,
 202425,non_italiani_esclusi,statale,23402,
-202425,unità_incluse,statale,113665,
-202425,studenti_inclusi,statale,5980898,N base dell'analisi; le metriche seguenti sono calcolate solo sulle unità incluse.
-202425,non_italiani_inclusi,statale,719502,
-202425,non_nati_in_Italia_inclusi,statale,270487,"Stima: non italiani x quota regionale per ordine di non nati in Italia (riferimento MIM 2022/23), arrotondata per unità. Base del criterio del 30%."
-202425,unità_sopra_30,statale,375,
-202425,studenti_in_unità_sopra_30,statale,4001,
-202425,non_italiani_in_unità_sopra_30,statale,2943,
-202425,non_nati_in_Italia_in_unità_sopra_30,statale,1530,
-202425,m_min_in_unità_sopra_30,statale,662,Formula senza sostituzione (N diminuisce); esclude le unità irrisolvibili.
-202425,m_min_con_sostituzione_legacy_in_unità_sopra_30,statale,573,"Formula originaria del repository (N costante, sostituzione 1:1); sottostima il numero di spostamenti se gli studenti non vengono sostituiti."
-202425,unità_sopra_30_irrisolvibili,statale,18,Unità con zero alunni italiani (N=F): la sola rimozione di alunni non italiani non può mai portarle sotto il 30%.
+202425,unità_escluse_sotto_10,statale,9996,
+202425,unità_incluse,statale,103669,
+202425,studenti_inclusi,statale,5923951,N base dell'analisi dopo il filtro alunni_totali >= 10.
+202425,non_italiani_inclusi,statale,713145,
+202425,non_nati_in_Italia_inclusi,statale,268170,"Stima: non italiani x quota regionale per ordine di non nati in Italia (riferimento MIM 2022/23), arrotondata per unità. Base del criterio del 30%."
+202425,unità_sopra_30,statale,111,
+202425,studenti_in_unità_sopra_30,statale,3209,
+202425,non_italiani_in_unità_sopra_30,statale,2443,
+202425,non_nati_in_Italia_in_unità_sopra_30,statale,1210,
+202425,m_min_in_unità_sopra_30,statale,398,Formula senza sostituzione (N diminuisce); esclude le unità irrisolvibili.
+202425,m_min_con_sostituzione_legacy_in_unità_sopra_30,statale,302,"Formula originaria del repository (N costante, sostituzione 1:1); sottostima il numero di spostamenti se gli studenti non vengono sostituiti."
+202425,unità_sopra_30_irrisolvibili,statale,0,Unità con zero alunni italiani (N=F): la sola rimozione di alunni non italiani non può mai portarle sotto il 30%.
 202425,righe_dataset_classi_studenti,statale,116317,
 202425,studenti_totali_classi_studenti,statale,6172717,
 202425,classi_totali,statale,325878,
 202425,righe_classi_con_anno_7_pluriclasse,statale,1392,
 202425,chiavi_classi_duplicate_scartate,statale,0,
-202425,unità_con_chiave_classi_esatta,statale,109020,
-202425,unità_senza_chiave_classi_esatta,statale,4645,
-202425,unità_con_delta_N_nonzero,statale,21,
-202425,somma_delta_N_cittadinanza_meno_classi,statale,178,
+202425,unità_con_chiave_classi_esatta,statale,103177,
+202425,unità_senza_chiave_classi_esatta,statale,492,
+202425,unità_con_delta_N_nonzero,statale,18,
+202425,somma_delta_N_cittadinanza_meno_classi,statale,171,
 202425,unità_senza_anagrafica,statale,0,
 202425,righe_anagrafe_standard,statale,50515,
 202425,righe_anagrafe_autonome,statale,1189,
@@ -35,24 +36,25 @@ anno_scolastico,metrica,tipo_gestione,valore,nota
 202425,unità_escluse,paritaria,0,Anagrafe mancante o caratteristica diversa da NORMALE (solo statali). Dettaglio in controlli_join_202425.csv e unita_escluse_202425.csv.
 202425,studenti_esclusi,paritaria,0,
 202425,non_italiani_esclusi,paritaria,0,
-202425,unità_incluse,paritaria,14991,
-202425,studenti_inclusi,paritaria,342921,N base dell'analisi; le metriche seguenti sono calcolate solo sulle unità incluse.
-202425,non_italiani_inclusi,paritaria,19146,
-202425,non_nati_in_Italia_inclusi,paritaria,7329,"Stima: non italiani x quota regionale per ordine di non nati in Italia (riferimento MIM 2022/23), arrotondata per unità. Base del criterio del 30%."
-202425,unità_sopra_30,paritaria,142,
-202425,studenti_in_unità_sopra_30,paritaria,997,
-202425,non_italiani_in_unità_sopra_30,paritaria,726,
-202425,non_nati_in_Italia_in_unità_sopra_30,paritaria,415,
-202425,m_min_in_unità_sopra_30,paritaria,232,Formula senza sostituzione (N diminuisce); esclude le unità irrisolvibili.
-202425,m_min_con_sostituzione_legacy_in_unità_sopra_30,paritaria,202,"Formula originaria del repository (N costante, sostituzione 1:1); sottostima il numero di spostamenti se gli studenti non vengono sostituiti."
-202425,unità_sopra_30_irrisolvibili,paritaria,12,Unità con zero alunni italiani (N=F): la sola rimozione di alunni non italiani non può mai portarle sotto il 30%.
+202425,unità_escluse_sotto_10,paritaria,3206,
+202425,unità_incluse,paritaria,11785,
+202425,studenti_inclusi,paritaria,326158,N base dell'analisi dopo il filtro alunni_totali >= 10.
+202425,non_italiani_inclusi,paritaria,17990,
+202425,non_nati_in_Italia_inclusi,paritaria,6799,"Stima: non italiani x quota regionale per ordine di non nati in Italia (riferimento MIM 2022/23), arrotondata per unità. Base del criterio del 30%."
+202425,unità_sopra_30,paritaria,39,
+202425,studenti_in_unità_sopra_30,paritaria,648,
+202425,non_italiani_in_unità_sopra_30,paritaria,507,
+202425,non_nati_in_Italia_in_unità_sopra_30,paritaria,261,
+202425,m_min_in_unità_sopra_30,paritaria,114,Formula senza sostituzione (N diminuisce); esclude le unità irrisolvibili.
+202425,m_min_con_sostituzione_legacy_in_unità_sopra_30,paritaria,85,"Formula originaria del repository (N costante, sostituzione 1:1); sottostima il numero di spostamenti se gli studenti non vengono sostituiti."
+202425,unità_sopra_30_irrisolvibili,paritaria,0,Unità con zero alunni italiani (N=F): la sola rimozione di alunni non italiani non può mai portarle sotto il 30%.
 202425,righe_dataset_classi_studenti,paritaria,14966,
 202425,studenti_totali_classi_studenti,paritaria,342921,
 202425,classi_totali,paritaria,20183,
 202425,righe_classi_con_anno_7_pluriclasse,paritaria,17,
 202425,chiavi_classi_duplicate_scartate,paritaria,0,
-202425,unità_con_chiave_classi_esatta,paritaria,14949,
-202425,unità_senza_chiave_classi_esatta,paritaria,42,
+202425,unità_con_chiave_classi_esatta,paritaria,11778,
+202425,unità_senza_chiave_classi_esatta,paritaria,7,
 202425,unità_con_delta_N_nonzero,paritaria,0,
 202425,somma_delta_N_cittadinanza_meno_classi,paritaria,0,
 202425,unità_senza_anagrafica,paritaria,0,
@@ -61,5 +63,5 @@ anno_scolastico,metrica,tipo_gestione,valore,nota
 202425,codici_anagrafe_duplicati_scartati,paritaria,0,
 202425,studenti_totali_dataset_classi_tutte_le_righe,tutte,6515638,Confronto con il totale del flusso cittadinanza; include anche l'anno classe 7.
 202425,studenti_totali_dataset_cittadinanza,tutte,6515638,"Tutte le righe, prima del filtro sulla caratteristica."
-202425,studenti_totali_inclusi,tutte,6250109,N base dell'analisi.
-202425,studenti_totali_classi_solo_chiavi_esatte,tutte,6244299,Solo unità incluse; non è un confronto completo perché l'anno classe 7 non è joinabile al corso.
+202425,studenti_totali_inclusi,tutte,6250109,N base dell'analisi dopo il filtro alunni_totali >= 10.
+202425,studenti_totali_classi_solo_chiavi_esatte,tutte,6244299,Solo unità con almeno 10 alunni; non è un confronto completo perché l'anno classe 7 non è joinabile al corso.
